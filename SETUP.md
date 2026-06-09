@@ -111,7 +111,7 @@ ai_worker/
 
 ```bash
 # MongoDB รันเป็น Windows service หลังจากติดตั้งแล้ว
-net start MongoDB
+เชื่อม mongodb+srv://6631501045_db_user:5IJeciYTtb2GwtwL@vehicle-self-tracking.axgoaf1.mongodb.net/
 ```
 
 ### A2. Backend
