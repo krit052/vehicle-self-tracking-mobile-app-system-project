@@ -63,8 +63,10 @@ cd vehicle-tracking-system
 เปิดไฟล์ `.env` ที่ root ของโปรเจกต์ แล้วใส่ค่าของคุณ:
 
 ```env
-# MongoDB
-MONGODB_URL=mongodb+srv://6631501045_db_user:5IJeciYTtb2GwtwL@vehicle-self-tracking.axgoaf1.mongodb.net/
+MONGO_USER=66xxxxxx_db_user   # user ตัวเองใน Database Users ของตัวเอง ใน atlas
+MONGO_PASSWORD=dawdawdawdawdad  # รหัสเอามาจาก Database users ของตัวเอง ใน atlas ถ้าไม่รู้ให้เจนรหัสใหม่
+MONGO_NAME=vehicle-self-tracking
+MONGODB_URL=mongodb+srv://66xxxxxx_db_user:dawdawdawdawdad@vehicle-self-tracking.axgoaf1.mongodb.net/
 
 # App secrets
 JWT_SECRET=any-random-string-here

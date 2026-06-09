@@ -1228,8 +1228,11 @@ Widget build(BuildContext context) {
 ## .env File
 
 ```env
-# MongoDB Atlas
-MONGODB_URL=mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/mfu_tracking
+# MongoDB
+MONGO_USER=66xxxxxx_db_user   # user ตัวเองใน Database Users ของตัวเอง ใน atlas
+MONGO_PASSWORD=dawdawdawdawdad  # รหัสเอามาจาก Database users ของตัวเอง ใน atlas ถ้าไม่รู้ให้เจนรหัสใหม่
+MONGO_NAME=vehicle-self-tracking
+MONGODB_URL=mongodb+srv://66xxxxxx_db_user:dawdawdawdawdad@vehicle-self-tracking.axgoaf1.mongodb.net/
 
 # App secrets
 JWT_SECRET=any-random-string-here
@@ -1246,8 +1249,7 @@ BACKEND_URL=http://localhost:8000
 # VIDEO_SOURCE=footage.mp4   ← ใส่ตอน develop เพื่อใช้ไฟล์แทน RTSP, ลบออกตอน deploy จริง
 
 # Cloudinary (รูปภาพ)
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_UPLOAD_PRESET=your-unsigned-preset
+CLOUDINARY_URL=cloudinary://596868621737339:<xLufQYj-Go_Krta_I6Ady_WVpTU>@dbhgmwsfg
 ```
 
 ---
