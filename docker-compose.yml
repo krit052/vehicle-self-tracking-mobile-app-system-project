@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: mfu_mongodb
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  backend:
+    build: ./backend
+    container_name: mfu_backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017/mfu_tracking
+      - BACKEND_URL=http://backend:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongodb
+
+  ai_worker:
+    build: ./ai_worker
+    container_name: mfu_ai_worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017/mfu_tracking
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./ai_worker/yolov11s_mfu.pt:/app/yolov11s_mfu.pt
+
+volumes:
+  mongo_data:

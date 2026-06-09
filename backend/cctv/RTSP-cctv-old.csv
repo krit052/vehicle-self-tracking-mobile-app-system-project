@@ -1,0 +1,433 @@
+WKT,name,ip,rtsp
+POINT (99.896803 20.044945),AD1-FL1-East,172.28.109.31,rtsp://mfustream:mediamfu2025@172.28.109.31/Streaming/Channels/101
+POINT (99.896654 20.044936),AD1-FL1-West,172.28.109.32,rtsp://mfustream:mediamfu2025@172.28.109.32/Streaming/Channels/101
+POINT (99.896611 20.044624),AD1-FL1-FireSouth,172.28.109.27,rtsp://mfustream:mediamfu2025@172.28.109.27/Streaming/Channels/101
+POINT (99.896634 20.044626),AD1-FL2-FireSouth,172.28.109.29,rtsp://mfustream:mediamfu2025@172.28.109.29/Streaming/Channels/101
+POINT (99.896625 20.045366),AD1-FL2-FireNorth,172.28.109.30,rtsp://mfustream:mediamfu2025@172.28.109.30/Streaming/Channels/101
+POINT (99.896607 20.045361),AD1-FL1-North,172.28.109.28,rtsp://mfustream:mediamfu2025@172.28.109.28/Streaming/Channels/101
+POINT (99.896689 20.045326),AD1-FLG-P2,172.28.109.34,rtsp://mfustream:mediamfu2025@172.28.109.34/Streaming/Channels/101
+POINT (99.896731 20.04527),AD1-FLG-P1,172.28.109.33,rtsp://mfustream:mediamfu2025@172.28.109.33/Streaming/Channels/101
+POINT (99.897143 20.046775),AD2-Carpark,172.28.109.20,rtsp://mfustream:mediamfu2025@172.28.109.20/Streaming/Channels/101
+POINT (99.897096 20.046777),AD2-Gate-outside,172.28.109.23,rtsp://mfustream:mediamfu2025@172.28.109.23/Streaming/Channels/101
+POINT (99.897091 20.046788),AD2-Gate-inside,172.28.109.24,rtsp://mfustream:mediamfu2025@172.28.109.24/Streaming/Channels/101
+POINT (99.896796 20.046657),AD2-FL1-Fire-inside2,172.28.109.19,rtsp://mfustream:mediamfu2025@172.28.109.19/Streaming/Channels/101
+POINT (99.897331 20.046916),AD2-Fire-FL1-inside,172.28.109.22,rtsp://mfustream:mediamfu2025@172.28.109.22/Streaming/Channels/101
+POINT (99.896783 20.046677),AD2-FL1-Fire-Outside,172.28.109.21,rtsp://mfustream:mediamfu2025@172.28.109.21/Streaming/Channels/101
+POINT (99.897119 20.046882),AD2-Finance-Counter,172.28.109.26,rtsp://mfustream:mediamfu2025@172.28.109.26/Streaming/Channels/101
+POINT (99.89716 20.046836),AD2-Finance-Door,172.28.109.25,rtsp://mfustream:mediamfu2025@172.28.109.25/Streaming/Channels/101
+POINT (99.893476 20.046068),AS-FL.G,172.28.106.40,rtsp://mfustream:mediamfu2025@172.28.106.40/Streaming/Channels/101
+POINT (99.893555 20.046143),AS-FL.G-MotorBike1,172.28.106.38,rtsp://mfustream:mediamfu2025@172.28.106.38/Streaming/Channels/101
+POINT (99.893697 20.046066),AS-FL.G-MotorBike2,172.28.106.39,rtsp://mfustream:mediamfu2025@172.28.106.39/Streaming/Channels/101
+POINT (99.893632 20.046103),AS-REG,172.28.106.44,rtsp://mfustream:mediamfu2025@172.28.106.44/Streaming/Channels/101
+POINT (99.893878 20.04619),AS-Way2-S1,172.28.106.43,rtsp://mfustream:mediamfu2025@172.28.106.43/Streaming/Channels/101
+POINT (99.893653 20.046113),AS-FL2-Gate,172.28.106.45,rtsp://mfustream:mediamfu2025@172.28.106.45/Streaming/Channels/101
+POINT (99.893937 20.046195),AS-FL2-MaUnit,172.28.106.35,rtsp://mfustream:mediamfu2025@172.28.106.35/Streaming/Channels/101
+POINT (99.893665 20.046117),AS-FL3-Gate,172.28.106.36,rtsp://mfustream:mediamfu2025@172.28.106.36/Streaming/Channels/101
+POINT (99.8936877 20.0461278),AS-FL4-1,172.28.106.33,rtsp://mfustream:mediamfu2025@172.28.106.33/Streaming/Channels/101
+POINT (99.893946 20.04616),AS-FL4-2,172.28.106.34,rtsp://mfustream:mediamfu2025@172.28.106.34/Streaming/Channels/101
+POINT (99.893765 20.046066),AS-Copy1,172.28.106.41,rtsp://mfustream:mediamfu2025@172.28.106.41/Streaming/Channels/101
+POINT (99.893789 20.046079),AS-Copy2,172.28.106.42,rtsp://mfustream:mediamfu2025@172.28.106.42/Streaming/Channels/101
+POINT (99.893669 20.046429),AV-AS-Side,172.28.106.74,rtsp://mfustream:mediamfu2025@172.28.106.74/Streaming/Channels/101
+POINT (99.893677 20.04654),Library-Living-FL3-1,172.28.106.97,rtsp://mfustream:mediamfu2025@172.28.106.97/Streaming/Channels/101
+POINT (99.89367 20.046678),Library_Living-FL3-2,172.28.106.98,rtsp://mfustream:mediamfu2025@172.28.106.98/Streaming/Channels/101
+POINT (99.893675 20.046851),AV-D1-Side,172.28.106.73,rtsp://mfustream:mediamfu2025@172.28.106.73/Streaming/Channels/101
+POINT (99.89539 20.044797),C1-C2-Side,172.28.111.23,rtsp://mfustream:mediamfu2025@172.28.111.23/Streaming/Channels/101
+POINT (99.895397 20.045151),C1-FL1-Lift,172.28.111.22,rtsp://mfustream:mediamfu2025@172.28.111.22/Streaming/Channels/101
+POINT (99.894795 20.0456),C1-S1-Side,172.28.111.21,rtsp://mfustream:mediamfu2025@172.28.111.21/Streaming/Channels/101
+POINT (99.895776 20.044052),C2-Junction-C3,172.28.111.11,rtsp://mfustream:mediamfu2025@172.28.111.11/Streaming/Channels/101
+POINT (99.895934 20.044299),C2-Middle-Stairway,172.28.111.12,rtsp://mfustream:mediamfu2025@172.28.111.12/Streaming/Channels/101
+POINT (99.896106 20.044138),C2-DoingamSide-Stairway,172.28.111.13,rtsp://mfustream:mediamfu2025@172.28.111.13/Streaming/Channels/101
+POINT (99.896259 20.043977),C2-East_stairway,172.28.111.14,rtsp://mfustream:mediamfu2025@172.28.111.14/Streaming/Channels/101
+POINT (99.894875 20.044115),C3-West,172.28.111.16,rtsp://mfustream:mediamfu2025@172.28.111.16/Streaming/Channels/101
+POINT (99.895615 20.044145),C3-East,172.28.111.15,rtsp://mfustream:mediamfu2025@172.28.111.15/Streaming/Channels/101
+POINT (99.895126 20.044207),C3-Way2C1,172.28.111.24,rtsp://mfustream:mediamfu2025@172.28.111.24/Streaming/Channels/101
+POINT (99.894824 20.042559),C5-M3-Side,172.28.111.20,rtsp://mfustream:mediamfu2025@172.28.111.20/Streaming/Channels/101
+POINT (99.894966 20.043078),C5-Way2Class,172.28.111.18,rtsp://mfustream:mediamfu2025@172.28.111.18/Streaming/Channels/101
+POINT (99.894992 20.042996),C5-C4-Side,172.28.111.19,off
+POINT (99.895046 20.04249),C5-Carpark,172.28.111.17,rtsp://mfustream:mediamfu2025@172.28.111.17/Streaming/Channels/101
+POINT (99.893652 20.047358),D1-Carpark,172.28.106.50,rtsp://mfustream:mediamfu2025@172.28.106.50/Streaming/Channels/101
+POINT (99.89379 20.04736),D1-1st-Floor,172.28.106.49,rtsp://mfustream:mediamfu2025@172.28.106.49/axis-media/media.amp
+POINT (99.893663 20.047323),D1-MainGate,172.28.106.47,rtsp://mfustream:mediamfu2025@172.28.106.47/Streaming/Channels/101
+POINT (99.893867 20.047195),D1-Stair-FL2,172.28.106.48,rtsp://mfustream:mediamfu2025@172.28.106.48/Streaming/Channels/101
+POINT (99.893852 20.04582),E1-Carpark,172.28.106.110,rtsp://mfustream:mediamfu2025@172.28.106.110/Streaming/Channels/101
+POINT (99.893917 20.045492),E1-MainGate-Out,172.28.106.107,rtsp://mfustream:mediamfu2025@172.28.106.107/Streaming/Channels/101
+POINT (99.893853 20.045499),E1-MainGate-In,172.28.106.108,rtsp://mfustream:mediamfu2025@172.28.106.108/Streaming/Channels/101
+POINT (99.893322 20.045627),E1-Sinology-Fl1,172.28.106.109,rtsp://mfustream:mediamfu2025@172.28.106.109/Streaming/Channels/101
+POINT (99.893886 20.045621),E1-Hall,172.28.106.111,rtsp://mfustream:mediamfu2025@172.28.106.111/Streaming/Channels/101
+POINT (99.893905 20.044384),E2-MainOut,172.28.106.101,rtsp://mfustream:mediamfu2025@172.28.106.101/Streaming/Channels/101
+POINT (99.893848 20.044341),E2-Main In,172.28.106.102,rtsp://mfustream:mediamfu2025@172.28.106.102/Streaming/Channels/101
+POINT (99.893805 20.044185),E2-FL.G-East,172.28.106.104,rtsp://mfustream:mediamfu2025@172.28.106.104/Streaming/Channels/101
+POINT (99.893308 20.044174),E2-Fl.G-FireExit-Stair-West,172.28.106.105,rtsp://mfustream:mediamfu2025@172.28.106.105/Streaming/Channels/101
+POINT (99.893844 20.044326),E2-FL2,172.28.106.103,rtsp://mfustream:mediamfu2025@172.28.106.103/Streaming/Channels/101
+POINT (99.896716 20.045713),S2-MotorPark,172.28.109.35,rtsp://mfustream:mediamfu2025@172.28.109.35/Streaming/Channels/101
+POINT (99.896326 20.046062),S3-MotorPark,172.28.109.36,off
+POINT (99.894791 20.047186),S6-CarPark-StairWay1,172.28.109.11,rtsp://mfustream:mediamfu2025@172.28.109.11:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.894772 20.047188),S6-CarPark-StairWay2,172.28.109.12,rtsp://mfustream:mediamfu2025@172.28.109.12:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.895197 20.04785),S7-A-In,172.28.114.12,off
+POINT (99.895223 20.047876),S7-A-Out,172.28.114.11,off
+POINT (99.895559 20.047665),S7B-In,172.28.114.14,rtsp://mfustream:mediamfu2025@172.28.114.14/Streaming/Channels/101
+POINT (99.895613 20.047595),S7B-OUT,172.28.114.13,rtsp://mfustream:mediamfu2025@172.28.114.13/Streaming/Channels/101
+POINT (99.895568 20.047757),S7-B-4th-Lift,,
+POINT (99.895588 20.047771),S7-B-5th-Lift,,
+POINT (99.894523 20.048192),Dorm-F1-FL1-Outside,172.28.106.11,rtsp://mfustream:mediamfu2025@172.28.106.11/Streaming/Channels/101
+POINT (99.894494 20.048182),Dorm-F1-ShoeShelf,172.28.106.13,rtsp://mfustream:mediamfu2025@172.28.106.13/Streaming/Channels/101
+POINT (99.894581 20.048191),Dorm-F1-02,172.28.106.12,rtsp://mfustream:mediamfu2025@172.28.106.12/Streaming/Channels/101
+POINT (99.894484 20.048169),Dorm-F1-6,172.28.106.16,rtsp://mfustream:mediamfu2025@172.28.106.16/Streaming/Channels/101
+POINT (99.89433 20.048008),Dorm-F1 way to F2,172.28.106.14,rtsp://mfustream:mediamfu2025@172.28.106.14/Streaming/Channels/101
+POINT (99.894435 20.048173),Dorm F1-Fl3,172.28.106.17,off
+POINT (99.894561 20.048227),Dorm F1-5,172.28.106.15,rtsp://mfustream:mediamfu2025@172.28.106.15/axis-media/media.amp
+POINT (99.893872 20.048369),Dorm F2 Outroad,172.28.106.32,rtsp://mfustream:mediamfu2025@172.28.106.32/Streaming/Channels/101
+POINT (99.894063 20.048358),Dorm F2 outside,172.28.106.19,rtsp://mfustream:mediamfu2025@172.28.106.19/Streaming/Channels/101
+POINT (99.892723 20.048602),DORM-F4-FL1-inside,172.28.107.69,rtsp://mfustream:mediamfu2025@172.28.107.69/Streaming/Channels/101
+POINT (99.892997 20.048559),F4 10.1.40.64,172.28.107.71,cisco
+POINT (99.89293 20.048413),DORM-F4-WaytoD1,172.28.107.70,rtsp://mfustream:mediamfu2025@172.28.107.70/Streaming/Channels/101
+POINT (99.892675 20.048599),DORM-F4-01,172.28.107.68,rtsp://mfustream:mediamfu2025@172.28.107.68/Streaming/Channels/101
+POINT (99.89264 20.048566),DORM-F4-5,172.28.107.72,rtsp://mfustream:mediamfu2025@172.28.107.72/axis-media/media.amp
+POINT (99.892691 20.04869),DORM-F4-6,172.28.107.73,rtsp://mfustream:mediamfu2025@172.28.107.73/axis-media/media.amp
+POINT (99.892704 20.048536),F4-7,172.28.107.74,rtsp://mfustream:mediamfu2025@172.28.107.74/axis-media/media.amp
+POINT (99.892766 20.048672),DORM-F4-8,172.28.107.75,rtsp://mfustream:mediamfu2025@172.28.107.75/Streaming/Channels/101
+POINT (99.892766 20.048622),Point 88,,
+POINT (99.891954 20.04997),DORM-F5-02,172.28.107.61,rtsp://mfustream:mediamfu2025@172.28.107.61/Streaming/Channels/101
+POINT (99.892033 20.049935),DORM-F5-ShoeShelf,172.28.107.62,rtsp://mfustream:mediamfu2025@172.28.107.62/Streaming/Channels/101
+POINT (99.891993 20.049962),DORM-F5-01,172.28.107.60,rtsp://mfustream:mediamfu2025@172.28.107.60/Streaming/Channels/101
+POINT (99.891982 20.049921),DORM-F5-6,172.28.107.65,rtsp://mfustream:mediamfu2025@172.28.107.65/Streaming/Channels/101
+POINT (99.892342 20.049824),DORM-F5-04,172.28.107.63,rtsp://mfustream:mediamfu2025@172.28.107.63/Streaming/Channels/101
+POINT (99.892054 20.049995),DORM-F5-7,172.28.107.66,rtsp://mfustream:mediamfu2025@172.28.107.66/Streaming/Channels/101
+POINT (99.892001 20.049852),F5-8,172.28.107.67,rtsp://mfustream:mediamfu2025@172.28.107.67/axis-media/media.amp
+POINT (99.89224 20.049761),O,,
+POINT (99.891846 20.050056),F5-5,172.28.107.64,rtsp://mfustream:mediamfu2025@172.28.107.64/Streaming/Channels/101
+POINT (99.892343 20.050313),DORM-F6-03,172.28.107.54,rtsp://mfustream:mediamfu2025@172.28.107.54/Streaming/Channels/101
+POINT (99.892328 20.050284),DORM-F6-04,172.28.107.55,rtsp://mfustream:mediamfu2025@172.28.107.55/Streaming/Channels/101
+POINT (99.891969 20.050418),DORM-F6-02,172.28.107.53,rtsp://mfustream:mediamfu2025@172.28.107.53/Streaming/Channels/101
+POINT (99.892013 20.050413),F6-FL2,172.28.107.56,rtsp://mfustream:mediamfu2025@172.28.107.56:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.891985 20.050387),DORM-F6-01,172.28.107.52,rtsp://mfustream:mediamfu2025@172.28.107.52/Streaming/Channels/101
+POINT (99.89199 20.050332),F6-FL3,172.28.107.57,rtsp://mfustream:mediamfu2025@172.28.107.57:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892067 20.050442),F6-FL4-1,172.28.107.58,rtsp://mfustream:mediamfu2025@172.28.107.58:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892226 20.050244),F6-FL4-2,172.28.107.59,rtsp://mfustream:mediamfu2025@172.28.107.59:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.891829 20.050519),Point 106,,
+POINT (99.892966 20.049785),F7-FL1-MainOUT,172.28.107.34,rtsp://mfustream:mediamfu2025@172.28.107.34:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892947 20.049732),F7-FL1-MainIN,172.28.107.35,rtsp://mfustream:mediamfu2025@172.28.107.35:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.893011 20.050072),F8-FL1-MainOUT,172.28.107.24,rtsp://mfustream:mediamfu2025@172.28.107.24:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.893027 20.05014),F8-FL1-MainIN,172.28.107.25,rtsp://mfustream:mediamfu2025@172.28.107.25:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892918 20.049767),F7-FL1-Right,172.28.107.37,rtsp://mfustream:mediamfu2025@172.28.107.37:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.893006 20.04974),F7-FL1-Left,172.28.107.36,rtsp://mfustream:mediamfu2025@172.28.107.36:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892891 20.049734),F7-FL2-Right,172.28.107.39,rtsp://mfustream:mediamfu2025@172.28.107.39:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892869 20.049702),F7-FL3-Right,172.28.107.41,rtsp://mfustream:mediamfu2025@172.28.107.41:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892837 20.049674),F7-FL4-Right,172.28.107.43,rtsp://mfustream:mediamfu2025@172.28.107.43:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892979 20.049702),F7-FL2-Left,172.28.107.38,rtsp://mfustream:mediamfu2025@172.28.107.38:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892955 20.049656),F7-FL3-Left,172.28.107.40,rtsp://mfustream:mediamfu2025@172.28.107.40:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892928 20.049631),F7-FL4-Left,172.28.107.42,rtsp://mfustream:mediamfu2025@172.28.107.42:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892918 20.050405),Sak3 FL1 6702 outside,172.28.107.106,rtsp://mfustream:mediamfu2025@172.28.107.106/Streaming/Channels/101
+POINT (99.893208 20.05054),Saktong3-FL4-Center,172.28.107.23,rtsp://mfustream:mediamfu2025@172.28.107.23/Streaming/Channels/101
+POINT (99.892979 20.050176),F8-FL4-Left,172.28.107.32,rtsp://mfustream:mediamfu2025@172.28.107.32:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892967 20.05015),F8-FL3-Left,172.28.107.30,off
+POINT (99.892959 20.050136),F8-FL2-Left,172.28.107.28,rtsp://mfustream:mediamfu2025@172.28.107.28:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892946 20.050116),F8-FL1-Left,172.28.107.26,rtsp://mfustream:mediamfu2025@172.28.107.26:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.89308 20.05014),F8-FL4-Right,172.28.107.33,rtsp://mfustream:mediamfu2025@172.28.107.33:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.893072 20.050124),F8-FL3-Right,172.28.107.31,rtsp://mfustream:mediamfu2025@172.28.107.31:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.89306 20.050101),F8-FL2-Right,172.28.107.29,rtsp://mfustream:mediamfu2025@172.28.107.29:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.89305 20.050081),F8-FL1-Right,172.28.107.27,off
+POINT (99.893132 20.05059),Saktong3-FL4-Left,172.28.107.21,rtsp://mfustream:mediamfu2025@172.28.107.21/Streaming/Channels/101
+POINT (99.893086 20.050602),Saktong3-FL1-MainIN,172.28.107.14,rtsp://mfustream:mediamfu2025@172.28.107.14/Streaming/Channels/101
+POINT (99.893207 20.050731),Saktong3-FL4-Right,172.28.107.22,rtsp://mfustream:mediamfu2025@172.28.107.22/Streaming/Channels/101
+POINT (99.89325 20.050824),Sak3 FL1 6701 outside,172.28.107.106,rtsp://mfustream:mediamfu2025@172.28.107.106/Streaming/Channels/101
+POINT (99.893014 20.050592),Saktong3-FL3-Left,172.28.107.19,rtsp://mfustream:mediamfu2025@172.28.107.19/Streaming/Channels/101
+POINT (99.893054 20.05057),Saktong3-FL2-Left,172.28.107.17,rtsp://mfustream:mediamfu2025@172.28.107.17/Streaming/Channels/101
+POINT (99.893094 20.050545),Saktong3-FL1-Left,172.28.107.15,rtsp://mfustream:mediamfu2025@172.28.107.15/Streaming/Channels/101
+POINT (99.893137 20.050517),Saktong3-FLG-Left,172.28.107.11,off
+POINT (99.89306 20.050703),Saktong3-FL3-Right,,
+POINT (99.893116 20.050683),Saktong3-FL2-Right,172.28.107.18,rtsp://mfustream:mediamfu2025@172.28.107.18/Streaming/Channels/101
+POINT (99.89317 20.050653),Saktong3-FL1-Right,172.28.107.16,rtsp://mfustream:mediamfu2025@172.28.107.16/Streaming/Channels/101
+POINT (99.893229 20.050618),Saktong3-FLG-Right,172.28.107.12,rtsp://mfustream:mediamfu2025@172.28.107.12/Streaming/Channels/101
+POINT (99.893017 20.050658),Saktong3-FL1-MainOUT,172.28.107.13,rtsp://mfustream:mediamfu2025@172.28.107.13/Streaming/Channels/101
+POINT (99.897378 20.056962),L6-GateOut,172.28.108.22,rtsp://mfustream:mediamfu2025@172.28.108.22/Streaming/Channels/101
+POINT (99.897434 20.056944),L6-GateIn,172.28.108.21,rtsp://mfustream:mediamfu2025@172.28.108.21/Streaming/Channels/101
+POINT (99.897857 20.057787),DORM-L5-04,172.28.108.41,rtsp://mfustream:mediamfu2025@172.28.108.41/Streaming/Channels/101
+POINT (99.897886 20.057716),L5-FL1-Out,172.28.108.39,rtsp://mfustream:mediamfu2025@172.28.108.39:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.897948 20.057691),L5-FL1-IN,172.28.108.38,rtsp://mfustream:mediamfu2025@172.28.108.38:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.897825 20.057671),L5-FL1-L,172.28.108.43,rtsp://mfustream:mediamfu2025@172.28.108.43:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.897857 20.05765),L5-FL2-L,172.28.108.45,rtsp://mfustream:mediamfu2025@172.28.108.45:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.897934 20.05762),L5-FL4-L,172.28.108.50,rtsp://mfustream:mediamfu2025@172.28.108.50:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.897905 20.057638),L5-FL3-L,172.28.108.47,rtsp://mfustream:mediamfu2025@172.28.108.47:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.897935 20.057816),L5-FL1-R,172.28.108.44,rtsp://mfustream:mediamfu2025@172.28.108.44:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.897967 20.05779),L5-FL2-R,172.28.108.46,rtsp://mfustream:mediamfu2025@172.28.108.46:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898004 20.057763),L5-FL3-R,172.28.108.48,rtsp://mfustream:mediamfu2025@172.28.108.48:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898039 20.057722),DORM-L5-12,172.28.108.49,rtsp://mfustream:mediamfu2025@172.28.108.49/Streaming/Channels/101
+POINT (99.898369 20.058109),Dorm-L4-01,172.28.108.23,rtsp://mfustream:mediamfu2025@172.28.108.23/Streaming/Channels/101
+POINT (99.898339 20.058129),Dorm-L4-02,172.28.108.24,rtsp://mfustream:mediamfu2025@172.28.108.24/Streaming/Channels/101
+POINT (99.898276 20.058145),L4-FL1-L,172.28.108.28,rtsp://mfustream:mediamfu2025@172.28.108.28:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.8983 20.058123),L4-FL2-L,172.28.108.30,rtsp://mfustream:mediamfu2025@172.28.108.30:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898319 20.058102),L4-FL3-L,172.28.108.32,rtsp://mfustream:mediamfu2025@172.28.108.32:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898343 20.058072),L4-FL4-L,172.28.108.34,rtsp://mfustream:mediamfu2025@172.28.108.34:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898334 20.058184),L4-FL1-R,172.28.108.29,rtsp://mfustream:mediamfu2025@172.28.108.29:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898364 20.058168),L4-FL2-R,172.28.108.31,rtsp://mfustream:mediamfu2025@172.28.108.31:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898393 20.058148),L4-FL3-R,172.28.108.33,rtsp://mfustream:mediamfu2025@172.28.108.33:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898416 20.05813),L4-FL4-R,172.28.108.35,rtsp://mfustream:mediamfu2025@172.28.108.35:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.900653 20.058194),Makham-IN,172.28.108.11,rtsp://mfustream:mediamfu2025@172.28.108.11/Streaming/Channels/101
+POINT (99.900681 20.05818),Makham-Out,172.28.108.12,rtsp://mfustream:mediamfu2025@172.28.108.12/Streaming/Channels/101
+POINT (99.900696 20.058238),MKP-FL1-L,172.28.108.13,rtsp://mfustream:mediamfu2025@172.28.108.13:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.900714 20.058222),MKP-FL2-L,172.28.108.15,rtsp://mfustream:mediamfu2025@172.28.108.15:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.900732 20.058201),MKP-FL3-L,172.28.108.17,rtsp://mfustream:mediamfu2025@172.28.108.17:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.900749 20.058179),MKP-FL4-L,172.28.108.19,rtsp://mfustream:mediamfu2025@172.28.108.19:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.900617 20.058184),MKP-FL1-R,172.28.108.14,rtsp://mfustream:mediamfu2025@172.28.108.14:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.90063 20.058169),MKP-FL2-R,172.28.108.16,rtsp://mfustream:mediamfu2025@172.28.108.16:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.900648 20.058147),MKP-FL3-R,172.28.108.18,rtsp://mfustream:mediamfu2025@172.28.108.18:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.900668 20.058128),MKP-FL4-R,172.28.108.20,rtsp://mfustream:mediamfu2025@172.28.108.20:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.894645 20.057281),Stadium-Nort,172.28.106.51,rtsp://mfustream:mediamfu2025@172.28.106.51/Streaming/Channels/101
+POINT (99.894999 20.057118),Stadium-East,172.28.106.53,rtsp://mfustream:mediamfu2025@172.28.106.53/Streaming/Channels/101
+POINT (99.894449 20.056866),Stadium-West,172.28.106.54,rtsp://mfustream:mediamfu2025@172.28.106.54/Streaming/Channels/101
+POINT (99.894795 20.056722),Stadium-South,172.28.106.52,rtsp://mfustream:mediamfu2025@172.28.106.52/Streaming/Channels/101
+POINT (99.89425 20.046021),S1-101,172.28.109.13,rtsp://mfustream:mediamfu2025@172.28.109.13/axis-media/media.amp
+POINT (99.894222 20.046018),S1-201,172.28.109.15,rtsp://mfustream:mediamfu2025@172.28.109.15/axis-media/media.amp
+POINT (99.894255 20.045846),S1-102,172.28.109.14,rtsp://mfustream:mediamfu2025@172.28.109.14/axis-media/media.amp
+POINT (99.89423 20.045846),S1-202,172.28.109.16,rtsp://mfustream:mediamfu2025@172.28.109.16/axis-media/media.amp
+POINT (99.894518 20.045803),S1-Lift-FL2,172.28.109.17,rtsp://mfustream:mediamfu2025@172.28.109.17/axis-media/media.amp
+POINT (99.8944031 20.0456356),S1-MainGate,172.28.109.18,rtsp://mfustream:mediamfu2025@172.28.109.14/axis-media/media.amp
+POINT (99.891846 20.051313),Boonsong-03,172.28.107.46,rtsp://mfustream:mediamfu2025@172.28.107.46/Streaming/Channels/101
+POINT (99.892063 20.051393),Boonsong-02,172.28.107.45,off
+POINT (99.892027 20.051374),Boonsong-FL1-Inside,172.28.107.44,rtsp://mfustream:mediamfu2025@172.28.107.44/Streaming/Channels/101
+POINT (99.89198 20.051366),Boonsong-FL2-R,172.28.107.86,rtsp://mfustream:mediamfu2025@172.28.107.86:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892004 20.05135),Boonsong-FL3-R,172.28.107.87,rtsp://mfustream:mediamfu2025@172.28.107.87:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892031 20.051335),Boonsong-FL4-R,172.28.107.88,rtsp://mfustream:mediamfu2025@172.28.107.88:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892023 20.051451),Boonsong-FL2-L,172.28.107.100,rtsp://mfustream:mediamfu2025@172.28.107.100/Streaming/Channels/101
+POINT (99.892048 20.05144),Boonsong-FL3-L,172.28.108.101,off
+POINT (99.892079 20.051427),Boonsong-FL4-L,172.28.108.102,off
+POINT (99.892087 20.05067),DORM-Prasert-04,172.28.107.51,rtsp://mfustream:mediamfu2025@172.28.107.51/Streaming/Channels/101
+POINT (99.892107 20.050862),Prasert-02,172.28.107.49,off
+POINT (99.891996 20.050821),Prasert-FL2-R,172.28.107.83,rtsp://mfustream:mediamfu2025@172.28.107.83:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892032 20.050804),Prasert-FL3-R,172.28.107.84,rtsp://mfustream:mediamfu2025@172.28.107.84:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892067 20.050787),Prasert-FL4-R,172.28.107.85,rtsp://mfustream:mediamfu2025@172.28.107.85:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892058 20.050934),Prasert-FL2-L,172.28.107.97,rtsp://mfustream:mediamfu2025@172.28.107.97/Streaming/Channels/101
+POINT (99.892093 20.050921),Prasert-FL3-L,172.28.107.98,rtsp://mfustream:mediamfu2025@172.28.107.98/Streaming/Channels/101
+POINT (99.892124 20.050903),Prasert-FL4-L,172.28.107.99,rtsp://mfustream:mediamfu2025@172.28.107.99/Streaming/Channels/101
+POINT (99.892534 20.050634),DORM-Pao-FL1-Outside,172.28.107.77,rtsp://mfustream:mediamfu2025@172.28.107.77/Streaming/Channels/101
+POINT (99.892556 20.050586),DORM-Pao-FL1-Inside,172.28.107.76,rtsp://mfustream:mediamfu2025@172.28.107.76/Streaming/Channels/101
+POINT (99.892462 20.050587),Pao-FL2-L,172.28.107.103,rtsp://mfustream:mediamfu2025@172.28.107.103/Streaming/Channels/101
+POINT (99.892478 20.050619),Pao-FL3-L,172.28.107.104,rtsp://mfustream:mediamfu2025@172.28.107.104/Streaming/Channels/101
+POINT (99.892498 20.050646),Pao-FL4-L,172.28.107.105,rtsp://mfustream:mediamfu2025@172.28.107.105/Streaming/Channels/101
+POINT (99.892569 20.050551),Pao-FL2-R,172.28.107.80,rtsp://mfustream:mediamfu2025@172.28.107.80:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.892588 20.05058),Pao-FL3-R,172.28.107.81,rtsp://mfustream:mediamfu2025@172.28.107.81:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.89261 20.050606),Pao-FL4-R,172.28.107.82,rtsp://mfustream:mediamfu2025@172.28.107.82:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898952 20.058558),DORM-L2-02,172.28.108.76,rtsp://mfustream:mediamfu2025@172.28.108.76/Streaming/Channels/101
+POINT (99.89898 20.058512),DORM-L2-01,172.28.108.75,rtsp://mfustream:mediamfu2025@172.28.108.75/Streaming/Channels/101
+POINT (99.899001 20.058603),L2-FL1-R,172.28.108.80,rtsp://mfustream:mediamfu2025@172.28.108.80:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898894 20.058584),L2-FL1-L,172.28.108.79,rtsp://mfustream:mediamfu2025@172.28.108.79:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.899027 20.058594),L2-FL2-R,172.28.108.82,rtsp://mfustream:mediamfu2025@172.28.108.82:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898902 20.058551),L2-FL2-L,172.28.108.81,rtsp://mfustream:mediamfu2025@172.28.108.81:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.8990407 20.0585793),DORM-L2-10,172.28.108.84,rtsp://mfustream:mediamfu2025@172.28.108.84/Streaming/Channels/101
+POINT (99.898923 20.058537),DORM-L2-9,172.28.108.83,rtsp://mfustream:mediamfu2025@172.28.108.83/Streaming/Channels/101
+POINT (99.89906 20.058554),L2-FL4-L,172.28.108.86,rtsp://mfustream:mediamfu2025@172.28.108.86:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898938 20.058508),DORM-L2-11,172.28.108.85,rtsp://mfustream:mediamfu2025@172.28.108.85/Streaming/Channels/101
+POINT (99.89934 20.058141),DORM-L1-FL1-outside,172.28.108.66,rtsp://mfustream:mediamfu2025@172.28.108.66/Streaming/Channels/101
+POINT (99.899366 20.058112),DORM-L1-FL1-inside,172.28.108.65,rtsp://mfustream:mediamfu2025@172.28.108.65/Streaming/Channels/101
+POINT (99.899407 20.058184),L1-FL1-R,172.28.108.68,rtsp://mfustream:mediamfu2025@172.28.108.68:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.899267 20.058138),L1-FL1-L,172.28.108.67,rtsp://mfustream:mediamfu2025@172.28.108.67:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.899429 20.058172),L1-FL2-R,172.28.108.70,rtsp://mfustream:mediamfu2025@172.28.108.70:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.89928 20.058115),L1-FL2-L,172.28.108.69,rtsp://mfustream:mediamfu2025@172.28.108.69:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.899452 20.058154),L1-FL3-R,172.28.108.72,rtsp://mfustream:mediamfu2025@172.28.108.72:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.899295 20.058102),L1-FL3-L,172.28.108.71,rtsp://mfustream:mediamfu2025@172.28.108.71:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.89947 20.058136),L1-FL4-R,172.28.108.74,rtsp://mfustream:mediamfu2025@172.28.108.74:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.899312 20.058095),L1-FL4-L,172.28.108.73,rtsp://mfustream:mediamfu2025@172.28.108.73:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898662 20.057892),DORM-L3-02,172.28.108.54,rtsp://mfustream:mediamfu2025@172.28.108.54/Streaming/Channels/101
+POINT (99.898686 20.057863),DORM-L3-01,172.28.108.53,rtsp://mfustream:mediamfu2025@172.28.108.53/Streaming/Channels/101
+POINT (99.898711 20.057922),L3-FL1-R,172.28.108.58,rtsp://mfustream:mediamfu2025@172.28.108.58:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898612 20.057903),L3-FL1-L,172.28.108.57,rtsp://mfustream:mediamfu2025@172.28.108.57:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898738 20.057904),L3-FL2-R,172.28.108.60,rtsp://mfustream:mediamfu2025@172.28.108.60:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898623 20.057879),L3-FL2-L,172.28.108.59,rtsp://mfustream:mediamfu2025@172.28.108.59:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898753 20.057882),L3-FL3-R,172.28.108.62,rtsp://mfustream:mediamfu2025@172.28.108.62:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898634 20.057862),DORM-L3-9,172.28.108.61,rtsp://mfustream:mediamfu2025@172.28.108.61/Streaming/Channels/101
+POINT (99.898766 20.057858),DORM-L3-12,172.28.108.64,rtsp://mfustream:mediamfu2025@172.28.108.64/Streaming/Channels/101
+POINT (99.898652 20.057833),L3-FL4-L,172.28.108.63,rtsp://mfustream:mediamfu2025@172.28.108.63:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.898607 20.057704),DORM-L3-04,172.28.108.56,cisco
+POINT (99.898776 20.057767),DORM-L3-03,172.28.108.55,rtsp://mfustream:mediamfu2025@172.28.108.55/Streaming/Channels/101
+POINT (99.894267 20.042141),M3 Floor2,172.28.111.30,rtsp://mfustream:mediamfu2025@172.28.111.30/axis-media/media.amp
+POINT (99.894283 20.042133),M3 Floor1,172.28.111.26,rtsp://mfustream:mediamfu2025@172.28.111.26/Streaming/Channels/101
+POINT (99.894169 20.042178),M3 In Foor1,172.28.111.27,rtsp://mfustream:mediamfu2025@172.28.111.27/Streaming/Channels/101
+POINT (99.894254 20.042335),M3 Carpark Mid,172.28.111.29,rtsp://mfustream:mediamfu2025@172.28.111.29/Streaming/Channels/101
+POINT (99.893852 20.04249),M3 Carpark2,172.28.111.28,rtsp://mfustream:mediamfu2025@172.28.111.28/Streaming/Channels/101
+POINT (99.894381 20.042243),M3 Carpark1,172.28.111.25,rtsp://mfustream:mediamfu2025@172.28.111.25/Streaming/Channels/101
+POINT (99.894236 20.042278),M3 Fl1,,
+POINT (99.890394 20.043636),Lift Fl8,172.28.113.48,rtsp://mfustream:mediamfu2025@172.28.113.48/Streaming/Channels/101
+POINT (99.890738 20.043765),Fl8 Mid,172.28.113.47,off
+POINT (99.890917 20.04399),Fl8 1,172.28.113.46,rtsp://mfustream:mediamfu2025@172.28.113.46/Streaming/Channels/101
+POINT (99.890659 20.043915),Fl8 2,172.28.113.45,off
+POINT (99.890374 20.043641),Fl7 Lift,172.28.113.44,rtsp://mfustream:mediamfu2025@172.28.113.44/Streaming/Channels/101
+POINT (99.890258 20.043975),Fl71,172.28.113.43,rtsp://mfustream:mediamfu2025@172.28.113.43/Streaming/Channels/101
+POINT (99.890901 20.044005),Fl7 2,172.28.113.42,rtsp://mfustream:mediamfu2025@172.28.113.42/Streaming/Channels/101
+POINT (99.890638 20.043926),Fl7 3,172.28.113.41,rtsp://mfustream:mediamfu2025@172.28.113.41/Streaming/Channels/101
+POINT (99.89036 20.043646),FL6 Lift,172.28.113.40,rtsp://mfustream:mediamfu2025@172.28.113.40/Streaming/Channels/101
+POINT (99.890238 20.043981),Fl6 A1,172.28.113.39,rtsp://mfustream:mediamfu2025@172.28.113.39/Streaming/Channels/101
+POINT (99.89062 20.043936),Fl6 A3,172.28.113.37,rtsp://mfustream:mediamfu2025@172.28.113.37/Streaming/Channels/101
+POINT (99.890882 20.044026),Fl6 A2,172.28.113.38,rtsp://mfustream:mediamfu2025@172.28.113.38/Streaming/Channels/101
+POINT (99.89034 20.043656),Fl5 Lift,172.28.113.36,rtsp://mfustream:mediamfu2025@172.28.113.36/Streaming/Channels/101
+POINT (99.890285 20.044005),Fl5 A1,172.28.113.35,rtsp://mfustream:mediamfu2025@172.28.113.35/Streaming/Channels/101
+POINT (99.890684 20.043955),Fl5 A2,172.28.113.33,rtsp://mfustream:mediamfu2025@172.28.113.33/Streaming/Channels/101
+POINT (99.890659 20.043965),Fl5 A3,172.28.113.34,rtsp://mfustream:mediamfu2025@172.28.113.34/Streaming/Channels/101
+POINT (99.890231 20.044381),Floo5 B4,172.28.113.60,rtsp://mfustream:mediamfu2025@172.28.113.60/Streaming/Channels/101
+POINT (99.889868 20.044378),Floor5B1,172.28.113.57,rtsp://mfustream:mediamfu2025@172.28.113.57/Streaming/Channels/101
+POINT (99.890069 20.044583),Floor5 2,172.28.113.58,rtsp://mfustream:mediamfu2025@172.28.113.58/Streaming/Channels/101
+POINT (99.890077 20.044166),Floor5 B3,172.28.113.59,rtsp://mfustream:mediamfu2025@172.28.113.59/Streaming/Channels/101
+POINT (99.890526 20.044218),Floor5 B5,172.28.113.61,rtsp://mfustream:mediamfu2025@172.28.113.61/Streaming/Channels/101
+POINT (99.890706 20.044419),Floor5 B6,172.28.113.62,rtsp://mfustream:mediamfu2025@172.28.113.62/Streaming/Channels/101
+POINT (99.890493 20.043765),Floor4 A1,172.28.113.28,rtsp://mfustream:mediamfu2025@172.28.113.28/Streaming/Channels/101
+POINT (99.890827 20.043916),Floor4 A2,172.28.113.29,rtsp://mfustream:mediamfu2025@172.28.113.29/Streaming/Channels/101
+POINT (99.890232 20.043805),Floor4 A3,172.28.113.30,rtsp://mfustream:mediamfu2025@172.28.113.30/Streaming/Channels/101
+POINT (99.89032 20.043675),Floor4 A4,172.28.113.30,rtsp://mfustream:mediamfu2025@172.28.113.30/Streaming/Channels/101
+POINT (99.89023 20.043965),Floor4 A5,172.28.113.32,rtsp://mfustream:mediamfu2025@172.28.113.32/Streaming/Channels/101
+POINT (99.890471 20.043779),Floor3 A,172.28.113.23,rtsp://mfustream:mediamfu2025@172.28.113.23/Streaming/Channels/101
+POINT (99.8903849 20.0441709),à¸ºB lift Right,172.28.113.51,rtsp://mfustream:mediamfu2025@172.28.113.51/Streaming/Channels/101
+POINT (99.8904104 20.0441709),B lift Middle,172.28.113.50,rtsp://mfustream:mediamfu2025@172.28.113.50/Streaming/Channels/101
+POINT (99.8904439 20.0441772),B lift Left,172.28.113.49,rtsp://mfustream:mediamfu2025@172.28.113.49/Streaming/Channels/101
+POINT (99.8903407 20.043924),Floor G,172.28.113.11,off
+POINT (99.8903635 20.0437262),Floor G,172.28.113.12,off
+POINT (99.8902924 20.0439933),Floor1 A5,172.28.113.17,rtsp://mfustream:mediamfu2025@172.28.113.17/Streaming/Channels/101
+POINT (99.8902119 20.0438118),Floor1 A3,172.28.113.15,off
+POINT (99.8902991 20.04374),A Lift Transport,172.28.113.54,rtsp://mfustream:mediamfu2025@172.28.113.54/Streaming/Channels/101
+POINT (99.8903313 20.0437514),A Lift Left,172.28.113.55,rtsp://mfustream:mediamfu2025@172.28.113.55/Streaming/Channels/101
+POINT (99.8903661 20.0437715),A lift right,172.28.113.56,rtsp://mfustream:mediamfu2025@172.28.113.56/Streaming/Channels/101
+POINT (99.8902937 20.0436959),Floor1 A4,172.28.113.16,off
+POINT (99.8904761 20.0437652),Floor1 A2,172.28.113.14,off
+POINT (99.8908476 20.0439152),Floor1 A3,172.28.113.15,off
+POINT (99.8903742 20.0436279),A Lift Toilet right,172.28.113.52,off
+POINT (99.8904171 20.0436468),A Lift Toilet left,172.28.113.53,rtsp://mfustream:mediamfu2025@172.28.113.53/Streaming/Channels/101
+POINT (99.8900472 20.044525),Floor1 B2,172.28.113.74,rtsp://mfustream:mediamfu2025@172.28.113.74/Streaming/Channels/101
+POINT (99.8900311 20.0443914),Floor1 B1,172.28.113.63,rtsp://mfustream:mediamfu2025@172.28.113.63/Streaming/Channels/101
+POINT (99.8903301 20.0445237),Floor1 B4,172.28.113.66,rtsp://mfustream:mediamfu2025@172.28.113.66/Streaming/Channels/101
+POINT (99.8905058 20.0445262),Floor1 B6,172.28.113.68,rtsp://mfustream:mediamfu2025@172.28.113.68/Streaming/Channels/101
+POINT (99.8903315 20.0443939),Floor1 B3,172.28.113.65,rtsp://mfustream:mediamfu2025@172.28.113.65/Streaming/Channels/101
+POINT (99.8905098 20.0443989),Floor1 B5,172.28.113.67,rtsp://mfustream:mediamfu2025@172.28.113.67/Streaming/Channels/101
+POINT (99.8904656 20.0441911),Floor1 B7,172.28.113.69,rtsp://mfustream:mediamfu2025@172.28.113.69/Streaming/Channels/101
+POINT (99.8908679 20.0445161),Floor1 B8,172.28.113.70,rtsp://mfustream:mediamfu2025@172.28.113.70/Streaming/Channels/101
+POINT (99.8908653 20.0444052),Floor1 B9,172.28.113.71,rtsp://mfustream:mediamfu2025@172.28.113.71/Streaming/Channels/101
+POINT (99.8908639 20.0442263),Floor1 B10,172.28.113.72,rtsp://mfustream:mediamfu2025@172.28.113.72/Streaming/Channels/101
+POINT (99.8903114 20.0439983),Floor2 A5,172.28.113.22,rtsp://mfustream:mediamfu2025@172.28.113.22/Streaming/Channels/101
+POINT (99.8902148 20.0437992),Floor2 A3,172.28.113.20,rtsp://mfustream:mediamfu2025@172.28.113.20/Streaming/Channels/101
+POINT (99.8903194 20.0436531),Floor2 A4,172.28.113.21,rtsp://mfustream:mediamfu2025@172.28.113.21/Streaming/Channels/101
+POINT (99.8904761 20.0437652),Floor2 A2,172.28.113.19,rtsp://mfustream:mediamfu2025@172.28.113.19/Streaming/Channels/101
+POINT (99.8908371 20.0439089),Floor2 A1,172.28.113.18,rtsp://mfustream:mediamfu2025@172.28.113.18/Streaming/Channels/101
+POINT (99.8900686 20.044535),Floor2 B4,172.28.113.76,rtsp://mfustream:mediamfu2025@172.28.113.76/Streaming/Channels/101
+POINT (99.8900485 20.0443914),Floor2 B3,172.28.113.75,rtsp://mfustream:mediamfu2025@172.28.113.75/Streaming/Channels/101
+POINT (99.8900337 20.0442301),Floor2 B1,172.28.113.73,rtsp://mfustream:mediamfu2025@172.28.113.73/Streaming/Channels/101
+POINT (99.889854 20.0442326),Floor2 B2,172.28.113.74,rtsp://mfustream:mediamfu2025@172.28.113.74/Streaming/Channels/101
+POINT (99.8903502 20.0445287),Floor2 B6,172.28.113.78,rtsp://mfustream:mediamfu2025@172.28.113.78/Streaming/Channels/101
+POINT (99.8903489 20.0443952),Floor2 B5,172.28.113.77,rtsp://mfustream:mediamfu2025@172.28.113.77/Streaming/Channels/101
+POINT (99.8905259 20.0445312),Floor2 B7,172.28.113.79,rtsp://mfustream:mediamfu2025@172.28.113.79/Streaming/Channels/101
+POINT (99.890483 20.0441936),Floor2 B8,172.28.113.80,rtsp://mfustream:mediamfu2025@172.28.113.80/Streaming/Channels/101
+POINT (99.8907016 20.0443989),Floor2 B9,172.28.113.81,rtsp://mfustream:mediamfu2025@172.28.113.81/Streaming/Channels/101
+POINT (99.8908441 20.044519),Floor2 B10,172.28.113.82,rtsp://mfustream:mediamfu2025@172.28.113.82/Streaming/Channels/101
+POINT (99.8908428 20.0444018),Floor2 B11,172.28.113.83,rtsp://mfustream:mediamfu2025@172.28.113.83/Streaming/Channels/101
+POINT (99.8908455 20.0442317),Floor2 B12,172.28.113.84,rtsp://mfustream:mediamfu2025@172.28.113.84/Streaming/Channels/101
+POINT (99.8903063 20.0439886),Floor3 A5,172.28.113.27,rtsp://mfustream:mediamfu2025@172.28.113.27/Streaming/Channels/101
+POINT (99.8902004 20.0437971),Floor3 A3,172.28.113.25,rtsp://mfustream:mediamfu2025@172.28.113.25/Streaming/Channels/101
+POINT (99.8903037 20.0436635),Floor3 A4,172.28.113.26,rtsp://mfustream:mediamfu2025@172.28.113.26/Streaming/Channels/101
+POINT (99.8904761 20.0437652),Floor3 A2,172.28.113.24,rtsp://mfustream:mediamfu2025@172.28.113.24/Streaming/Channels/101
+POINT (99.8908371 20.0439089),Floor3 A1,172.28.113.23,rtsp://mfustream:mediamfu2025@172.28.113.23/Streaming/Channels/101
+POINT (99.890064 20.0445266),Floor3 B4,172.28.113.88,rtsp://mfustream:mediamfu2025@172.28.113.88/Streaming/Channels/101
+POINT (99.890064 20.0443918),Floor3 B3,172.28.113.87,rtsp://mfustream:mediamfu2025@172.28.113.87/Streaming/Channels/101
+POINT (99.8900533 20.0442318),Floor3 B1,172.28.113.85,rtsp://mfustream:mediamfu2025@172.28.113.85/Streaming/Channels/101
+POINT (99.8898763 20.0442331),Floor3 B2,172.28.113.86,rtsp://mfustream:mediamfu2025@172.28.113.86/Streaming/Channels/101
+POINT (99.8903617 20.0445203),Floor3 B6,172.28.113.90,off
+POINT (99.8903644 20.0443918),Floor3 B5,172.28.113.89,rtsp://mfustream:mediamfu2025@172.28.113.89/Streaming/Channels/101
+POINT (99.890483 20.0441936),Floor3 B8,172.28.113.92,off
+POINT (99.8905522 20.0445354),Floor3 B7,172.28.113.91,rtsp://mfustream:mediamfu2025@172.28.113.91/Streaming/Channels/101
+POINT (99.8907212 20.0444044),Floor3 B9,172.28.113.93,off
+POINT (99.8907091 20.0442494),Floor3 B10,172.28.113.94,off
+POINT (99.8908834 20.044519),Floor3 B11,172.28.113.95,off
+POINT (99.8908848 20.0444057),Floor3 B12,172.28.113.96,rtsp://mfustream:mediamfu2025@172.28.113.96/Streaming/Channels/101
+POINT (99.8908848 20.0442293),Floor3 B13,172.28.113.97,rtsp://mfustream:mediamfu2025@172.28.113.97/Streaming/Channels/101
+POINT (99.8903296 20.0440025),Floor4 A5,172.28.113.32,rtsp://mfustream:mediamfu2025@172.28.113.32/Streaming/Channels/101
+POINT (99.8902022 20.0437871),Floor4 A3,172.28.113.32,rtsp://mfustream:mediamfu2025@172.28.113.32/Streaming/Channels/101
+POINT (99.8903054 20.0436535),Floor4 A4,172.28.113.31,rtsp://mfustream:mediamfu2025@172.28.113.31/Streaming/Channels/101
+POINT (99.8904761 20.0437652),Floor4 A2,172.28.113.29,rtsp://mfustream:mediamfu2025@172.28.113.29/Streaming/Channels/101
+POINT (99.8908097 20.0439244),Floor4 A1,172.28.113.28,rtsp://mfustream:mediamfu2025@172.28.113.28/Streaming/Channels/101
+POINT (99.8899256 20.0446879),Floor4 B4,172.28.113.101,rtsp://mfustream:mediamfu2025@172.28.113.101/Streaming/Channels/101
+POINT (99.889888 20.0446954),Floor4 B3,172.28.113.100,off
+POINT (99.8900798 20.0445304),Floor4 B6,172.28.113.103,rtsp://mfustream:mediamfu2025@172.28.113.103/Streaming/Channels/101
+POINT (99.8900758 20.0443918),Floor4 B5,172.28.113.102,rtsp://mfustream:mediamfu2025@172.28.113.102/Streaming/Channels/101
+POINT (99.8900422 20.0442305),Floor4 B1,172.28.113.98,rtsp://mfustream:mediamfu2025@172.28.113.98/Streaming/Channels/101
+POINT (99.8898893 20.0442343),Floor4 B2,172.28.113.99,rtsp://mfustream:mediamfu2025@172.28.113.99/Streaming/Channels/101
+POINT (99.8903748 20.0445266),Floor4 B8,172.28.113.105,rtsp://mfustream:mediamfu2025@172.28.113.105/Streaming/Channels/101
+POINT (99.8903815 20.0443956),Floor4 B7,172.28.113.104,off
+POINT (99.890483 20.0441936),Floor4 B10,172.28.113.104,off
+POINT (99.8905641 20.0445194),Floor4 B9,172.28.113.106,rtsp://mfustream:mediamfu2025@172.28.113.106/Streaming/Channels/101
+POINT (99.8907585 20.0442624),Floor4 B11,172.28.113.108,rtsp://mfustream:mediamfu2025@172.28.113.108/Streaming/Channels/101
+POINT (99.8907693 20.0444023),Floor4 B12,172.28.113.109,rtsp://mfustream:mediamfu2025@172.28.113.109/Streaming/Channels/101
+POINT (99.8908229 20.0445131),Floor4 B13,172.28.113.110,rtsp://mfustream:mediamfu2025@172.28.113.110/Streaming/Channels/101
+POINT (99.891004 20.0445131),Floor4 B14,172.28.113.111,rtsp://mfustream:mediamfu2025@172.28.113.111/Streaming/Channels/101
+POINT (99.8910603 20.0442952),Floor4 B15,172.28.113.112,rtsp://mfustream:mediamfu2025@172.28.113.112/Streaming/Channels/101
+POINT (99.8909986 20.0442083),Floor4 B16,172.28.113.113,rtsp://mfustream:mediamfu2025@172.28.113.113/Streaming/Channels/101
+POINT (99.8899196 20.0442104),Floor4 B 17,172.28.113.114,rtsp://mfustream:mediamfu2025@172.28.113.114/Streaming/Channels/101
+POINT (99.8899839 20.0442154),Floor4 B 18,172.28.113.115,rtsp://mfustream:mediamfu2025@172.28.113.115/Streaming/Channels/101
+POINT (99.8935927 20.0466095),Lib Fl3 MainIN,172.28.106.86,rtsp://mfustream:mediamfu2025@172.28.106.86/Streaming/Channels/101
+POINT (99.8935511 20.0465289),Lib Fl3 Circulation,172.28.106.71,rtsp://mfustream:mediamfu2025@172.28.106.71/Streaming/Channels/101
+POINT (99.8933553 20.0465415),Lib Fl3 06,172.28.106.88,rtsp://mfustream:mediamfu2025@172.28.106.88/Streaming/Channels/101
+POINT (99.89359 20.0465967),AV M learning Entrance,172.28.106.80,rtsp://mfustream:mediamfu2025@172.28.106.80/Streaming/Channels/101
+POINT (99.8935941 20.0465362),AV M learning 01,172.28.106.81,rtsp://mfustream:mediamfu2025@172.28.106.81/Streaming/Channels/101
+POINT (99.8936276 20.0465186),AV M Learning 02,172.28.106.82,rtsp://mfustream:mediamfu2025@172.28.106.82/Streaming/Channels/101
+POINT (99.8935592 20.0464619),AV M Learning 03,172.28.106.83,rtsp://mfustream:mediamfu2025@172.28.106.83/Streaming/Channels/101
+POINT (99.8935538 20.0465085),AV M learning 04,172.28.106.84,rtsp://mfustream:mediamfu2025@172.28.106.84/Streaming/Channels/101
+POINT (99.8935404 20.0464921),AV M Learning 05,172.28.106.85,rtsp://mfustream:mediamfu2025@172.28.106.85/Streaming/Channels/101
+POINT (99.8932574 20.0464984),AV M learning 06,172.28.106.77,rtsp://mfustream:mediamfu2025@172.28.106.77/Streaming/Channels/101
+POINT (99.8936222 20.0464254),AV M learning 07,172.28.106.78,rtsp://mfustream:mediamfu2025@172.28.106.78/Streaming/Channels/101
+POINT (99.8933325 20.0464884),AV M Learning 08,172.28.106.79,rtsp://mfustream:mediamfu2025@172.28.106.79/Streaming/Channels/101
+POINT (99.89335 20.0464493),Lib Fl2 6701,172.28.106.112,rtsp://mfustream:mediamfu2025@172.28.106.112/Streaming/Channels/101
+POINT (99.8933084 20.0467869),Lib Fl2 6702,172.28.106.113,rtsp://mfustream:mediamfu2025@172.28.106.113/Streaming/Channels/101
+POINT (99.8935739 20.0467328),ArchiveHouse in1,172.28.106.90,rtsp://mfustream:mediamfu2025@172.28.106.90/axis-media/media.amp
+POINT (99.8935726 20.046792),ArchiveHouse In 2,172.28.106.91,rtsp://mfustream:mediamfu2025@172.28.106.91/axis-media/media.amp
+POINT (99.8935096 20.0467731),ArchiveHouse R2,172.28.106.92,rtsp://mfustream:mediamfu2025@172.28.106.92/axis-media/media.amp
+POINT (99.8934371 20.0467365),ArchiveHouse R3,172.28.106.93,rtsp://mfustream:mediamfu2025@172.28.106.93/axis-media/media.amp
+POINT (99.8934291 20.0468084),ArchiveHouse R4,172.28.106.94,rtsp://mfustream:mediamfu2025@172.28.106.94/axis-media/media.amp
+POINT (99.893354 20.0467567),ArchiveHouse R5,172.28.106.95,rtsp://mfustream:mediamfu2025@172.28.106.95/axis-media/media.amp
+POINT (99.8933594 20.0468361),ArchiveHouse R6,172.28.106.96,rtsp://mfustream:mediamfu2025@172.28.106.96/axis-media/media.amp
+POINT (99.8934895 20.0465047),Lib Fl3 6703,172.28.106.114,rtsp://mfustream:mediamfu2025@172.28.106.114/Streaming/Channels/101
+POINT (99.8933848 20.0465413),Lib Fl3 6704,172.28.106.115,rtsp://mfustream:mediamfu2025@172.28.106.115/Streaming/Channels/101
+POINT (99.8933996 20.0467088),Lib Fl3 6705,172.28.106.116,rtsp://mfustream:mediamfu2025@172.28.106.116/Streaming/Channels/101
+POINT (99.8932373 20.0465539),Lib Fl3 SelfAccess,172.28.106.75,rtsp://mfustream:mediamfu2025@172.28.106.75/Streaming/Channels/101
+POINT (99.8935136 20.0465224),LIB Fl4 6707,172.28.106.118,rtsp://mfustream:mediamfu2025@172.28.106.118/Streaming/Channels/101
+POINT (99.8933433 20.04654),LIB FL4 6706,172.28.106.117,rtsp://mfustream:mediamfu2025@172.28.106.117/Streaming/Channels/101
+POINT (99.893232 20.0464984),Lib Fl4 6708,172.28.106.119,rtsp://mfustream:mediamfu2025@172.28.106.119/Streaming/Channels/101
+POINT (99.893362 20.0464988),LIB Fl4 6706,,
+POINT (99.8932199 20.0466651),LIB Fl4 09,172.28.106.63,rtsp://mfustream:mediamfu2025@172.28.106.63/Streaming/Channels/101
+POINT (99.8932172 20.0466538),LIB Fl4 10,172.28.106.64,rtsp://mfustream:mediamfu2025@172.28.106.64/Streaming/Channels/101
+POINT (99.8933768 20.0467143),LIB FL4 6710,172.28.106.121,rtsp://mfustream:mediamfu2025@172.28.106.121/Streaming/Channels/101
+POINT (99.8932239 20.046776),LIB Fl4 6711,172.28.106.122,rtsp://mfustream:mediamfu2025@172.28.106.122/Streaming/Channels/101
+POINT (99.8935967 20.0467155),LIB Fl4 6712,172.28.106.123,rtsp://mfustream:mediamfu2025@172.28.106.123/Streaming/Channels/101
+POINT (99.8935766 20.0467092),LIB Fl4 6713,172.28.106.124,rtsp://mfustream:mediamfu2025@172.28.106.124/Streaming/Channels/101
+POINT (99.8933714 20.0467042),LIB Fl4 6709,172.28.106.120,rtsp://mfustream:mediamfu2025@172.28.106.120/Streaming/Channels/101
+POINT (99.8937322 20.046461),LIB Fl4 6714,172.28.106.125,rtsp://mfustream:mediamfu2025@172.28.106.125/Streaming/Channels/101
+POINT (99.8937121 20.0467911),LIB FL4 6715,172.28.106.126,rtsp://mfustream:mediamfu2025@172.28.106.126/Streaming/Channels/101
+POINT (99.8935793 20.0465417),LIB FL4 6716,172.28.106.127,rtsp://mfustream:mediamfu2025@172.28.106.127/Streaming/Channels/101
+POINT (99.8934734 20.0464421),LIB FL4 6717,172.28.106.128,rtsp://mfustream:mediamfu2025@172.28.106.128/Streaming/Channels/101
+POINT (99.8933983 20.0464988),LIB FL5 6718Â,172.28.106.129,rtsp://mfustream:mediamfu2025@172.28.106.129/Streaming/Channels/101
+POINT (99.8932306 20.0464824),LIB FL5 6719,172.28.106.130,rtsp://mfustream:mediamfu2025@172.28.106.130/Streaming/Channels/101
+POINT (99.8932118 20.0466424),LIB FL5 6720,172.28.106.131,rtsp://mfustream:mediamfu2025@172.28.106.131/Streaming/Channels/101
+POINT (99.8932145 20.0467735),LIB FL5 6721,172.28.106.132,rtsp://mfustream:mediamfu2025@172.28.106.132/Streaming/Channels/101
+POINT (99.8932548 20.0468163),LIB FL5 6722,172.28.106.133,rtsp://mfustream:mediamfu2025@172.28.106.133/Streaming/Channels/101
+POINT (99.8936759 20.0464988),LIB FL5 6723,172.28.106.134,rtsp://mfustream:mediamfu2025@172.28.106.134/Streaming/Channels/101
+POINT (99.8936222 20.04681),LIB FL5 2,172.28.106.66,off
+POINT (99.893582 20.0465039),LIB FL5 3,172.28.106.67,off
+POINT (99.8934009 20.0468402),LIB Fl5 Quiet,,
+POINT (99.892054 20.050842),DORM-Prasert-FL1-Inside,172.28.107.48,rtsp://mfustream:mediamfu2025@172.28.107.48/Streaming/Channels/101
+POINT (99.8936148 20.0461018),AS FL3 CITS,172.28.106.37,cisco
+POINT (99.8940767 20.0483419),Dorm F2 1,172.28.106.18,rtsp://mfustream:mediamfu2025@172.28.106.18/Streaming/Channels/101
+POINT (99.8939587 20.0483318),Dorm F2 03,172.28.106.20,rtsp://mfustream:mediamfu2025@172.28.106.20/Streaming/Channels/101
+POINT (99.8940714 20.0483117),Dorm f2 05,172.28.106.22,rtsp://mfustream:mediamfu2025@172.28.106.22/axis-media/media.amp
+POINT (99.8939587 20.0483041),Dorm f2 06,172.28.106.23,rtsp://mfustream:mediamfu2025@172.28.106.23/axis-media/media.amp
+POINT (99.8940553 20.0482915),Dorm F2 fl3 6701,172.28.106.24,off
+POINT (99.8938139 20.0497983),Dorm F3 Fl2 outside,172.28.106.26,rtsp://mfustream:mediamfu2025@172.28.106.26/Streaming/Channels/101
+POINT (99.8937763 20.0498436),Dorm F3 Fl1 inside,172.28.106.25,rtsp://mfustream:mediamfu2025@172.28.106.25/Streaming/Channels/101
+POINT (99.8937656 20.0497958),Dorm F3 Shoeshelf,172.28.106.27,rtsp://mfustream:mediamfu2025@172.28.106.27/Streaming/Channels/101
+POINT (99.893889 20.0498386),Dorm F3 5,172.28.106.29,rtsp://mfustream:mediamfu2025@172.28.106.29/Streaming/Channels/101
+POINT (99.8938943 20.0497882),F3 7,172.28.106.31,rtsp://mfustream:mediamfu2025@172.28.106.31/axis-media/media.amp
+POINT (99.8938568 20.0498336),F3 6,172.28.106.30,rtsp://mfustream:mediamfu2025@172.28.106.30/axis-media/media.amp
+POINT (99.8937924 20.049763),F3 Fl3 6701,172.28.106.28,off
+POINT (99.8975451 20.0562864),DORM-L7-GATEOUT,172.28.108.36,rtsp://mfustream:mediamfu2025@172.28.108.36/Streaming/Channels/101
+POINT (99.8975827 20.0563141),DORM-L7-GATEIN,172.28.108.37,rtsp://mfustream:mediamfu2025@172.28.108.37/Streaming/Channels/101
+POINT (99.8975708 20.0562413),L7 FL1 L 6701,172.28.108.92,rtsp://mfustream:mediamfu2025@172.28.108.92/Streaming/Channels/101
+POINT (99.8975118 20.0563421),L7 FL1 R 6702,172.28.108.93,rtsp://mfustream:mediamfu2025@172.28.108.93/Streaming/Channels/101
+POINT (99.8976043 20.0562627),L7 FL2 L 6703,172.28.108.94,rtsp://mfustream:mediamfu2025@172.28.108.94/Streaming/Channels/101
+POINT (99.8975497 20.0563868),L7 FL2 R,172.28.108.89,rtsp://mfustream:mediamfu2025@172.28.108.89:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.8976462 20.0562936),L7 FL3 L 6704,172.28.108.95,rtsp://mfustream:mediamfu2025@172.28.108.95/Streaming/Channels/101
+POINT (99.8975926 20.0564145),L7 FL3 R,172.28.108.90,rtsp://mfustream:mediamfu2025@172.28.108.14:554/cam/realmonitor?channel=1&subtype=0
+POINT (99.8976891 20.0563011),L7 FL4 L 6705,172.28.108.96,rtsp://mfustream:mediamfu2025@172.28.108.96/Streaming/Channels/101
+POINT (99.8976382 20.0564322),L7 FL4 R,172.28.108.92,rtsp://mfustream:mediamfu2025@172.28.108.92/Streaming/Channels/101

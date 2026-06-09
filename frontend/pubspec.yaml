@@ -1,0 +1,49 @@
+name: frontend
+description: "MFU Vehicle Self-Tracking App"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Maps
+  flutter_map: ^7.0.2
+  flutter_osm_plugin: ^1.4.5 
+  latlong2: ^0.9.1
+
+  # Firebase
+  firebase_core: ^3.13.1
+  firebase_messaging: ^15.2.7
+
+  # HTTP
+  dio: ^5.8.0+1
+
+  # Storage
+  flutter_secure_storage: ^9.2.4
+
+  # Camera / image
+  image_picker: ^1.1.2
+
+  # OAuth WebView
+  flutter_inappwebview: ^6.1.5
+
+  # State management
+  provider: ^6.1.2
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
