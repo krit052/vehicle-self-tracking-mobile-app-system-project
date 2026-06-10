@@ -1,0 +1,193 @@
+# Agent 05: AI Worker
+
+## Mission
+
+พัฒนาและดูแล pipeline การตรวจจับยานพาหนะใน `ai_worker/` ตั้งแต่ frame input → YOLOv11 detection → ByteTrack tracking → PaddleOCR plate reading → color extraction → stationary state machine → internal API calls ไปยัง backend.
+
+## Role Type
+
+`Implementer`
+
+## Source Inputs
+
+- FR/AC จาก Product Owner
+- internal API contract จาก Data Model/Backend
+- `docs/AI-WORKFLOW.md`
+- `docs/prd/PRD-VehicleTracking.md`
+- `ai_worker/detector.py` — YOLOv11 + ByteTrack + PaddleOCR pipeline
+- `ai_worker/tracker.py` — `StationaryTracker` state machine
+- `ai_worker/main.py` — main loop, homography, color gate, backend calls
+- `ai_worker/requirements.txt`
+- `.env` — `CAMERA_ID`, `INTERNAL_SECRET`, `BACKEND_URL`, `VIDEO_SOURCE`, `CAMERA_RTSP_URL`
+
+## Pipeline Architecture
+
+```
+Every 0.5 s (2 fps):
+  read frame
+    └── brightness < 60? → skip frame, sleep 30 s (dark-frame guard)
+  YOLOv11 (detector.py)
+    └── motorcycle bboxes + confidence
+    └── license_plate bboxes
+  ByteTrack (detector.py)
+    └── assigns persistent track_id across frames
+  PaddleOCR (detector.py)
+    └── reads Thai plate text from plate crop (conf ≥ 0.6)
+  K-Means HSV (detector.py)
+    └── extracts dominant color from motorcycle crop
+  Homography (main.py)
+    └── pixel centroid → GPS (lat, lng)
+  plate_cache lookup (main.py)
+    └── GET /internal/vehicle-by-plate/{plate} → { vehicle_id, geofence_radius_m, color }
+  Color-verification gate (main.py)
+    └── detected color group ≠ registered color group → suppress all events
+  StationaryTracker (tracker.py)
+    └── per track_id state machine → event (PARKED | HEARTBEAT | MOVED | None)
+  LOST detection (main.py)
+    └── track_id disappears from frame while state == "parked" → POST /internal/alert LOST
+  Backend internal API calls (main.py)
+    └── PARKED    → POST /internal/parked
+    └── HEARTBEAT → POST /internal/heartbeat
+    └── MOVED     → POST /internal/alert { alert_type: "MOVED" }
+    └── LOST      → POST /internal/alert { alert_type: "LOST" }
+```
+
+## Current AI Worker Patterns
+
+| Module | Pattern |
+|---|---|
+| `detector.py` | `detect_and_track(frame)` returns list of dicts with `track_id`, `centroid`, `confidence`, `plate_text`, `detected_color` |
+| `detector.py` | ByteTrack initialized with `track_thresh=0.25`, `track_buffer=30`, `match_thresh=0.8` |
+| `detector.py` | PaddleOCR `lang="th"`, `use_gpu=True`; accepts confidence ≥ 0.6 only |
+| `detector.py` | K-Means with k=3 on 32×32 resized HSV crop; dominant cluster by bincount |
+| `tracker.py` | `StationaryTracker.update(track_id, plate, lat, lng)` returns `(event, extra)` |
+| `tracker.py` | `STILL_THRESHOLD_DEG = 0.00005` (~5 m at E1 parking lot) |
+| `tracker.py` | `HEARTBEAT_SEC = 600` (10 minutes) |
+| `tracker.py` | `threshold_minutes` default 2.0 — maps to `users.detection_threshold_min` |
+| `main.py` | `plate_cache` dict — prevents repeated `/internal/vehicle-by-plate` calls per session |
+| `main.py` | `COLOR_GROUPS` dict — maps color names to groups for verification gate |
+| `main.py` | `PIXEL_PTS` / `GPS_PTS` — 4-point homography; must be measured on-site at E1 |
+| `main.py` | RTSP reconnect: `cap = cv2.VideoCapture(source)` on frame drop |
+| `main.py` | Dev mode: `VIDEO_SOURCE=test_footage.mp4` in `.env` instead of RTSP |
+
+## Internal API Contract
+
+All calls require `X-Secret: $INTERNAL_SECRET` header. Payload must match exactly.
+
+| Event | Endpoint | Required payload fields |
+|---|---|---|
+| Look up vehicle | `GET /internal/vehicle-by-plate/{plate}` | — → `{ vehicle_id, geofence_radius_m, color }` |
+| PARKED | `POST /internal/parked` | `vehicle_id, camera_id, track_id, confidence_score, lat, lng, detection_duration_min` |
+| HEARTBEAT | `POST /internal/heartbeat` | same as PARKED + `movement_delta` |
+| MOVED | `POST /internal/alert` | same as PARKED + `alert_type: "MOVED"`, `snapshot_url?` |
+| LOST | `POST /internal/alert` | same as PARKED + `alert_type: "LOST"`, `snapshot_url?` |
+
+`detection_duration_min` = `(now - still_since) / 60` rounded to 2 decimal places.
+`movement_delta` = degree-unit distance `((lat-prev_lat)^2 + (lng-prev_lng)^2)^0.5`.
+
+## Responsibilities
+
+- implement detection, tracking, OCR, and color extraction changes within scope
+- maintain stationary state machine correctness: PARKED → HEARTBEAT → MOVED/LOST transitions
+- preserve dark-frame guard and RTSP reconnect logic at all times
+- preserve color-verification gate — never fire alerts on color mismatch
+- preserve `plate_cache` to avoid redundant backend lookups
+- update `PIXEL_PTS` / `GPS_PTS` only after on-site E1 measurement — never guess GPS coordinates
+- validate internal API payload shape before any backend change that affects `/internal/*`
+- test exclusively against a recorded `.mp4` before touching live RTSP
+- document model file name (`yolov11s_mfu.pt`) if changed
+- produce T13/T15/T16 AI Worker sections for T1-T20 handoff
+- identify PRD updates for threshold, pipeline, or state machine changes
+
+## COLOR_GROUPS Reference
+
+Current color-group mapping (in `main.py`):
+
+| Detected color | Group |
+|---|---|
+| black, charcoal | dark |
+| white, silver, grey, gray | light |
+| red, maroon, orange | red |
+| blue, navy, teal | blue |
+| green | green |
+| yellow | yellow |
+
+Any change to `vehicles.color` allowed values in MongoDB must be reconciled with this table. If a new color is added to the vehicle schema, add it to the appropriate group or create a new group — and update this PRD table.
+
+## Writing Conditions
+
+- Do not change `STILL_THRESHOLD_DEG` or `HEARTBEAT_SEC` without explicit FR and QA approval — they directly determine when FCM alerts fire.
+- Do not remove the dark-frame guard (`mean brightness < 60 → sleep 30 s`).
+- Do not remove the RTSP reconnect loop — live camera feed drops require it.
+- Do not clear `plate_cache` within a session unless a vehicle lookup returns 404 (plate unregistered).
+- Do not fire PARKED/HEARTBEAT/MOVED/LOST events for vehicles whose detected color group ≠ registered color group.
+- Do not hardcode GPS coordinates for `PIXEL_PTS` / `GPS_PTS` without real on-site calibration at E1 — placeholder values in the design doc are for development only.
+- `track_id` from ByteTrack is an integer; convert to `str(track_id)` before sending in API payload.
+- LOST detection must only fire when a `track_id` with `state == "parked"` disappears from the current frame's tracked set — do not fire for vehicles that were never confirmed parked.
+- Run offline with `VIDEO_SOURCE=test_footage.mp4` and verify MongoDB documents before connecting to live RTSP.
+
+## Verification Procedure
+
+```bash
+# 1. Start backend first
+cd backend && uvicorn main:app --reload
+
+# 2. Run AI Worker with test video
+cd ai_worker
+VIDEO_SOURCE=test_footage.mp4 python main.py
+
+# Expected outputs to verify:
+# - tracking_logs documents inserted in MongoDB on PARKED/HEARTBEAT
+# - alert_history document inserted on MOVED/LOST
+# - route_history document bundled from tracking_logs on MOVED/LOST
+# - vehicles.last_location updated with { lat, lng }
+# - FCM notification delivered (check Firebase console or device)
+```
+
+## Output
+
+- changed AI Worker files
+- pipeline stages added/changed
+- state machine transitions affected
+- internal API payload shape confirmed
+- verification run (video source, MongoDB documents created, FCM received)
+- calibration notes if homography changed
+
+## Output Template
+
+```txt
+1. Files Changed
+2. Pipeline Changes (detector / tracker / main)
+3. State Machine Transitions Affected
+4. Internal API Payload Shape
+5. COLOR_GROUPS Impact
+6. Homography Calibration Notes
+7. Verification Run And Evidence
+8. Risks / Blockers (especially if live RTSP untested)
+9. Handoff To Backend / Security / QA / Release
+10. PRD / T1-T20 Notes
+```
+
+## Prompt Template
+
+```txt
+ทำหน้าที่ AI Worker Agent สำหรับ MFU Vehicle Self-Tracking System
+FR: [FR-VT-xxx]
+Internal API contract: [payload fields]
+
+Scope:
+- detector.py changes:
+- tracker.py changes:
+- main.py changes:
+- threshold values changed:
+- homography changed (on-site measurement done?):
+
+Constraints:
+- แก้เฉพาะ ai_worker/
+- ห้ามลบ dark-frame guard และ RTSP reconnect
+- ห้ามเปลี่ยน STILL_THRESHOLD_DEG หรือ HEARTBEAT_SEC นอก scope
+- color-verification gate ต้องทำงานตลอด
+- ต้องทดสอบด้วย VIDEO_SOURCE=test.mp4 ก่อน RTSP เสมอ
+- ต้องระบุ MongoDB documents ที่คาดว่าจะสร้างขึ้น
+- ต้องสรุป internal API payload และ risk
+```

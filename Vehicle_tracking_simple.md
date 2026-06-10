@@ -57,16 +57,19 @@ cloudinary เก็บรูปภาพ snap shot
 project/
 ├── frontend/         ← Flutter mobile app
 ├── backend/          ← FastAPI server
-│   ├── main.py
-│   ├── database.py
-│   ├── seed_camera.py   ← run once to insert camera into DB
-│   ├── Dockerfile
-│   └── requirements.txt
-├── ai_worker/        ← AI detection script
-│   ├── main.py
-│   ├── detector.py   ← YOLOv11 + ByteTrack + PaddleOCR
-│   ├── tracker.py    ← stationary state machine
-│   ├── Dockerfile
+    ├── db/        ← database
+|       ├── database.py          
+|   |── api/        ← api
+|       ├── api.py          
+|   ├── ai_worker/        ← AI detection script
+|       ├── main.py       
+|       ├── detector.py   ← YOLOv11 + ByteTrack + PaddleOCR
+|       ├── tracker.py    ← stationary state machine
+|       ├── Dockerfile
+|       └── requirements.txt
+    ├── cctv/       ← camera script
+|        ├── seed_camera.py   ← run once to insert camera into DB 
+|   |── Dockerfile
 │   └── requirements.txt
 ├── docker-compose.yml
 └── .env
@@ -214,7 +217,7 @@ Before starting the backend or AI worker, insert the E1 camera into MongoDB.
 This gives you the `camera_id` that tracking_logs and the AI worker will reference.
 
 ```python
-# backend/seed_camera.py
+# backend/at_worker/cctv/seed_camera.py
 # Run: python seed_camera.py
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -248,7 +251,7 @@ Then copy the printed `CAMERA_ID` value into `.env`.
 ## 3. Backend (FastAPI)
 
 ```python
-# backend/main.py
+# backend/api/api.py
 from fastapi import FastAPI, Header, HTTPException, Depends
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
@@ -977,15 +980,17 @@ generate_variants	สร้างรูปแบบทางเลือกข�
 ### Screens
 
 ```
-SplashScreen
-  ├── JWT saved? → HomeScreen
-  └── no JWT    → OAuthScreen (Lamduan WebView)
-                        ↓
-                    HomeScreen
-                   /     |      \                \
-          MapScreen  RouteList  VehicleList      notification
-                                    ↓
-                             AddVehicle / EditVehicle
+login_screen
+  ├── JWT stored → home_screen
+  └── no JWT     → oauth_screen (Lamduan WebView)
+                       ↓
+                   home_screen
+                  /    |    \         \
+     live_tracking  route_history  vehicle_profile  notifications
+      _screen        _screen          _screen         _screen
+                        ↓                
+               route_detail_screen   
+                                    
 ```
 
 ### pubspec.yaml
