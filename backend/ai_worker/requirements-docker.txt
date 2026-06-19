@@ -1,8 +1,0 @@
-ultralytics>=8.3.0
-paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
-paddleocr>=3.3.0
-opencv-python-headless>=4.10.0
-supervision>=0.26.0
-requests>=2.31.0
-numpy>=1.26.4
-cloudinary==1.44.2

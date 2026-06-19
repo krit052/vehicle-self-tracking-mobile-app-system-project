@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 
@@ -30,6 +33,7 @@ class LoginScreen extends StatelessWidget {
                     _LoginCard(),
                     const Spacer(flex: 3),
                     _Footer(),
+                    if (kDebugMode) const _DebugFcmToken(),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -247,6 +251,44 @@ class _Footer extends StatelessWidget {
         fontSize: 12,
         color: AppColors.onSurfaceVariant,
       );
+}
+
+class _DebugFcmToken extends StatefulWidget {
+  const _DebugFcmToken();
+
+  @override
+  State<_DebugFcmToken> createState() => _DebugFcmTokenState();
+}
+
+class _DebugFcmTokenState extends State<_DebugFcmToken> {
+  String? _token;
+
+  @override
+  void initState() {
+    super.initState();
+    FirebaseMessaging.instance.getToken().then((t) => setState(() => _token = t));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        if (_token == null) return;
+        Clipboard.setData(ClipboardData(text: _token!));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('FCM token copied')),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+        child: Text(
+          '[DEBUG] FCM: ${_token ?? 'loading...'}',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 10, color: Colors.grey),
+        ),
+      ),
+    );
+  }
 }
 
 class _FooterLink extends StatelessWidget {

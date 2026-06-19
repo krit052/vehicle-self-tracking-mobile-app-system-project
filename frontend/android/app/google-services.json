@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "917723478645",
+    "project_id": "vehicle-self-tracking",
+    "storage_bucket": "vehicle-self-tracking.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:917723478645:android:91603ece3a16ac1e48163c",
+        "android_client_info": {
+          "package_name": "com.mfu.vehicleselftracking"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDLOI5PnSGMZ0AvEN1nbiOJZip5mOws1c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
