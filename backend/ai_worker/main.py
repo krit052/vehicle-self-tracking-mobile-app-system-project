@@ -22,7 +22,6 @@ from firebase_admin import credentials, messaging
 
 _HERE = Path(__file__).parent
 
-load_dotenv(_HERE.parent / ".env")  # backend/.env (MongoDB, JWT, etc.)
 load_dotenv(_HERE / ".env")         # ai_worker/.env overrides
 
 ROBOFLOW_API_KEY = os.environ["ROBOFLOW_API_KEY"]
