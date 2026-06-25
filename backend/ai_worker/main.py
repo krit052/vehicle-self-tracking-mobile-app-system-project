@@ -1,6 +1,7 @@
 # New code cloud treading
 
 import os
+import re
 import time
 import json
 import base64
@@ -15,6 +16,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from inference_sdk import InferenceHTTPClient
 from pymongo import MongoClient
+import requests as _requests
 
 import firebase_admin
 from firebase_admin import credentials, messaging
@@ -46,6 +48,55 @@ FCM_DEVICE_TOKEN = os.environ["FCM_DEVICE_TOKEN"]
 
 MONGODB_URL = os.environ["MONGODB_URL"]
 MONGO_NAME = os.environ["MONGO_NAME"]
+
+TYPHOON_OCR_API_KEY      = os.environ["TYPHOON_OCR_API_KEY"]
+TYPHOON_OCR_MODEL        = os.environ["TYPHOON_OCR_MODEL"]
+TYPHOON_OCR_TASK_TYPE    = os.environ["TYPHOON_OCR_TASK_TYPE"]
+TYPHOON_OCR_MAX_TOKENS   = int(os.environ["TYPHOON_OCR_MAX_TOKENS"])
+TYPHOON_OCR_TEMPERATURE  = float(os.environ["TYPHOON_OCR_TEMPERATURE"])
+TYPHOON_OCR_TOP_P        = float(os.environ["TYPHOON_OCR_TOP_P"])
+TYPHOON_OCR_REP_PENALTY  = float(os.environ["TYPHOON_OCR_REP_PENALTY"])
+
+_TYPHOON_OCR_URL = "https://api.opentyphoon.ai/v1/ocr"
+
+
+def _call_typhoon_ocr(img_np) -> str:
+    success, encoded = cv2.imencode(".jpg", img_np)
+    if not success:
+        return ""
+    resp = _requests.post(
+        _TYPHOON_OCR_URL,
+        headers={"Authorization": f"Bearer {TYPHOON_OCR_API_KEY}"},
+        files={"file": ("plate.jpg", encoded.tobytes(), "image/jpeg")},
+        data={
+            "model":              TYPHOON_OCR_MODEL,
+            "task_type":          TYPHOON_OCR_TASK_TYPE,
+            "max_tokens":         str(TYPHOON_OCR_MAX_TOKENS),
+            "temperature":        str(TYPHOON_OCR_TEMPERATURE),
+            "top_p":              str(TYPHOON_OCR_TOP_P),
+            "repetition_penalty": str(TYPHOON_OCR_REP_PENALTY),
+        },
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        print(f"[TyphoonOCR] API error {resp.status_code}: {resp.text[:200]}")
+        return ""
+    texts = []
+    for page in resp.json().get("results", []):
+        if not isinstance(page, dict):
+            continue
+        if page.get("success") and page.get("message"):
+            try:
+                content = page["message"]["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError, AttributeError):
+                continue
+            try:
+                text = json.loads(content).get("natural_text", content)
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                text = content  # API returned plain text, use it directly
+            if text:
+                texts.append(text.strip())
+    return "\n".join(texts).strip()
 
 
 _mongo_collection = None
@@ -315,6 +366,99 @@ def decode_output_image(output_image):
         return None
 
 
+_PLATE_MIN_WIDTH      = int(os.environ.get("PLATE_MIN_WIDTH", "40"))
+_PLATE_MIN_HEIGHT     = int(os.environ.get("PLATE_MIN_HEIGHT", "15"))
+_PLATE_CONF_MIN       = float(os.environ.get("PLATE_CONFIDENCE_MIN", "0.35"))
+_PLATE_TEXT_MAX_CHARS = int(os.environ.get("PLATE_TEXT_MAX_CHARS", "25"))
+
+
+_THAI_NON_PLATE_TERMS = re.compile(
+    r'ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.|ถนน|ถ\.|หมู่ที่|หมู่บ้าน|ซอย|แขวง|เขต|ทะเล|นิคม|เทศบาล|องค์การ|บริษัท|ห้างหุ้น'
+)
+
+
+def _filter_plate_text(raw: str) -> str:
+    lines = [l.strip() for l in raw.splitlines() if l.strip()]
+    kept = [
+        l for l in lines
+        if 2 <= len(l) <= _PLATE_TEXT_MAX_CHARS
+        and re.search(r'[\d฀-๿]', l)
+        and not _THAI_NON_PLATE_TERMS.search(l)
+    ]
+    return " ".join(kept)
+
+
+def crop_plates_and_ocr(frame, plate_predictions: List[dict]) -> str:
+    """Crop each detected plate from the original frame and read with typhoon-ocr."""
+    if not plate_predictions or frame is None:
+        return ""
+
+    fh, fw = frame.shape[:2]
+
+    # Filter out low-confidence and undersized predictions (single-char false positives)
+    valid = []
+    for p in plate_predictions:
+        try:
+            if float(p.get("confidence", 1.0)) < _PLATE_CONF_MIN:
+                continue
+            if float(p.get("width", 0)) < _PLATE_MIN_WIDTH:
+                continue
+            if float(p.get("height", 0)) < _PLATE_MIN_HEIGHT:
+                continue
+            valid.append(p)
+        except (TypeError, ValueError):
+            continue
+
+    # Keep only the highest-confidence plate per frame to avoid duplicate reads
+    valid.sort(key=lambda p: float(p.get("confidence", 0)), reverse=True)
+    valid = valid[:1]
+
+    if not valid:
+        return ""
+
+    print(f"[TyphoonOCR] Processing {len(valid)} plate(s) (filtered from {len(plate_predictions)})")
+    texts = []
+    for pred in valid:
+        try:
+            cx = float(pred["x"])
+            cy = float(pred["y"])
+            w  = float(pred["width"])
+            h  = float(pred["height"])
+
+            x1 = max(0, int(cx - w / 2))
+            y1 = max(0, int(cy - h / 2))
+            x2 = min(fw, int(cx + w / 2))
+            y2 = min(fh, int(cy + h / 2))
+
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            raw = frame[y1:y2, x1:x2]
+            h_p, w_p = raw.shape[:2]
+            if w_p < 80:
+                gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
+                processed = cv2.resize(gray, None, fx=4.0, fy=4.0, interpolation=cv2.INTER_CUBIC)
+                kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+                processed = cv2.filter2D(processed, -1, kernel)
+            elif w_p < 150:
+                processed = cv2.resize(raw, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+            else:
+                processed = cv2.resize(raw, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
+
+            raw_text = _call_typhoon_ocr(processed)
+            clean = _filter_plate_text(raw_text)
+            if clean:
+                texts.append(clean)
+                print("[TyphoonOCR] Plate text:", clean)
+
+        except (KeyError, TypeError, ValueError) as e:
+            print("[TyphoonOCR] Bad prediction format:", repr(e))
+        except Exception as e:
+            print("[TyphoonOCR] API error:", repr(e))
+
+    return " | ".join(texts)
+
+
 def stringify(value) -> str:
     if value is None:
         return ""
@@ -444,6 +588,14 @@ def _cloud_worker(frame, latest_annotated_box: list):
     try:
         print("[Cloud] Sending frame to Roboflow...")
         output = run_roboflow_cloud(frame)
+        output.pop("license_plate_text", None)  # discard any Roboflow OCR; Typhoon OCR is used instead
+
+        plate_preds = get_predictions(output, "license_plate_predictions")
+        if plate_preds:
+            plate_text = crop_plates_and_ocr(frame, plate_preds)
+            if plate_text:
+                output["license_plate_text"] = plate_text
+
         print_summary(output)
 
         annotated = decode_output_image(output.get("tracked_output_image"))
@@ -486,7 +638,7 @@ def main():
         now = time.time()
 
         display = latest_annotated_box[0] if latest_annotated_box[0] is not None else frame
-        cv2.imshow("Edge Gateway, Roboflow Cloud GLM-OCR", display)
+        cv2.imshow("Edge Gateway | Roboflow + Typhoon OCR", display)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
