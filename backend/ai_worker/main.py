@@ -282,7 +282,7 @@ class PairStateManager:
         self,
         people: List[SimpleTrack],
         motorcycles: List[SimpleTrack],
-        license_plate_text: str = "",
+        # license_plate_text: str = "",
     ) -> List[dict]:
         self._evict_stale()
         now = time.time()
@@ -300,10 +300,11 @@ class PairStateManager:
             is_moto_visible = moto is not None and moto.missed == 0
 
             # สืบทอดข้อมูลป้ายทะเบียนล่าสุดเข้าไปเก็บใน Pair ความทรงจำระยะยาว
-            if moto and moto.plate_text != "-":
+            if pair.plate_text == "-" and moto and getattr(moto, 'plate_text', "-") != "-":
+                # ถ้า AI อ่านป้ายได้และจับคู่ให้รถคันนี้แล้ว ให้อัปเดตเข้า Pair
                 pair.plate_text = moto.plate_text
-            elif license_plate_text and is_moto_visible:
-                pair.plate_text = license_plate_text
+            # elif license_plate_text and is_moto_visible:
+            #     pair.plate_text = license_plate_text
 
             if is_person_visible and is_moto_visible:
                 pair.last_updated = now
@@ -620,7 +621,8 @@ def assign_plate_to_nearest_motorcycle(
 def compute_distance_alerts(tracks: List[SimpleTrack], plate_text: str) -> List[dict]:
     people = [t for t in tracks if t.cls == "person"]
     motorcycles = [t for t in tracks if t.cls == "motorcycle"]
-    return pair_state_manager.update(people, motorcycles, plate_text)
+    # ไม่ต้องส่ง plate_text เข้าไปแล้ว ปล่อยให้มันดึงจาก motorcycles[i].plate_text เอง
+    return pair_state_manager.update(people, motorcycles)
 
 def print_summary(output: dict, tracks: List[SimpleTrack]):
     people = [t for t in tracks if t.cls == "person"]
