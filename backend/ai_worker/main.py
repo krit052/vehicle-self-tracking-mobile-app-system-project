@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 from datetime import datetime, timezone
 from dotenv import load_dotenv
+
 from inference_sdk import InferenceHTTPClient
 from pymongo import MongoClient
 import requests as _requests
@@ -454,13 +455,6 @@ def bbox_bottom_center(det: dict) -> Optional[Tuple[float, float]]:
     except Exception:
         return None
 
-def save_temp_frame(frame) -> str:
-    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-    tmp_path = tmp.name
-    tmp.close()
-    cv2.imwrite(tmp_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 98])
-    return tmp_path
-
 def normalize_result(result):
     if isinstance(result, list) and len(result) > 0:
         return result[0]
@@ -468,21 +462,36 @@ def normalize_result(result):
         return result
     return {}
 
+def _scale_preds(preds: list, factor: float):
+    for p in preds:
+        for key in ("x", "y", "width", "height"):
+            if key in p:
+                try:
+                    p[key] = float(p[key]) * factor
+                except (TypeError, ValueError):
+                    pass
+
 def run_roboflow_cloud(frame) -> dict:
-    frame_path = save_temp_frame(frame)
-    try:
-        result = client.run_workflow(
-            workspace_name=WORKSPACE_NAME,
-            workflow_id=WORKFLOW_ID,
-            images={"image": frame_path},
-            use_cache=True,
-        )
-        return normalize_result(result)
-    finally:
-        try:
-            os.remove(frame_path)
-        except OSError:
-            pass
+    h, w = frame.shape[:2]
+    if w > _MAX_FRAME_WIDTH:
+        scale = _MAX_FRAME_WIDTH / w
+        send_frame = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        inv_scale = 1.0 / scale
+    else:
+        send_frame = frame
+        inv_scale = 1.0
+
+    result = client.run_workflow(
+        workspace_name=WORKSPACE_NAME,
+        workflow_id=WORKFLOW_ID,
+        images={"image": send_frame},
+        use_cache=True,
+    )
+    r = normalize_result(result)
+    if inv_scale != 1.0:
+        for key in ("license_plate_predictions", "raw_person_motorcycle_predictions"):
+            _scale_preds(r.get(key, {}).get("predictions", []), inv_scale)
+    return r
 
 def decode_output_image(output_image):
     if not output_image:
@@ -497,6 +506,8 @@ def decode_output_image(output_image):
     except Exception as e:
         print("[Display] Could not decode output image:", e)
         return None
+
+_MAX_FRAME_WIDTH = int(os.environ.get("MAX_FRAME_WIDTH", 1280))
 
 _PLATE_MIN_WIDTH = int(os.environ.get("PLATE_MIN_WIDTH", 40))
 _PLATE_MIN_HEIGHT = int(os.environ.get("PLATE_MIN_HEIGHT", 15))
@@ -763,7 +774,7 @@ def main():
             ah, aw = annotated.shape[:2]
             # 💡 3. ดักจับเงื่อนไขภาพว่างเปล่า (aw/ah เป็น 0) ป้องกันบั๊กหารด้วยศูนย์
             if aw > 0 and ah > 0:
-                scale = min(0.25, (w * 0.25) / aw, (h * 0.25) / ah)
+                scale = min(0.5, (w * 0.5) / aw, (h * 0.5) / ah)
                 small = cv2.resize(annotated, (int(aw * scale), int(ah * scale)))
                 sh, sw = small.shape[:2]
                 frame[0:sh, w - sw:w] = small
