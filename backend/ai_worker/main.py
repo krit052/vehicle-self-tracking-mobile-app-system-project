@@ -4,6 +4,10 @@ import tracking.tracker as trk
 import utils as utl
 import tracking.pairing as pr
 
+#ใช้ logging เพื่อเวลาเกิดปัญหาจะได้รู้ว่าปัญหาเกิดที่กล้องตัวไหน และเกิดเวลาไหน
+import logging
+logger = logging.getLogger(__name__)
+
 import re
 import time
 import json
@@ -608,7 +612,7 @@ def connect_rtsp(url: str):
 
 def _cloud_worker(cam: CameraContext, frame):
     try:
-        print(f"[Cloud][{cam.name}] Sending frame to Roboflow...")
+        logger.info(f"[Cloud][{cam.name}] Sending frame to Roboflow...")
         output = run_roboflow_cloud(frame)
         output.pop("license_plate_text", None)
 
@@ -641,7 +645,7 @@ def _cloud_worker(cam: CameraContext, frame):
             print(f"[Alert][{cam.name}] No alert")
 
     except Exception as e:
-        print(f"[Cloud][{cam.name}] Error:", repr(e))
+        logger.exception(f"[Cloud][{cam.name}] Error")
 
 def _fit_window(cam: CameraContext, frame, index: int, total: int):
     """
