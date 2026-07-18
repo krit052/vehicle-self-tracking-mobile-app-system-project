@@ -29,6 +29,9 @@ from cameras import Camera, resolve_active_cameras
 _HERE = Path(__file__).parent
 load_dotenv(_HERE / ".env")
 
+#สำหรับเปิด/ปิด Display window (หน้าต่างโชว์ภาพ) ถ้าไม่อยากให้โชว์ภาพให้ตั้งเป็น false
+ENABLE_DISPLAY = os.environ.get("ENABLE_DISPLAY", "true").strip().lower() == "true"
+
 # 🛠️ 1. ดึงข้อมูลสภาพแวดล้อมพร้อมใส่ค่า Default ป้องกันแครช (Safe Environment Getters)
 ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "")
 WORKSPACE_NAME = os.environ.get("WORKSPACE_NAME", "default-workspace")
@@ -167,13 +170,18 @@ def get_notifications_collection():
             print("[Mongo] Connection setup failed:", repr(e))
     return _mongo_collection
 
-if not ROBOFLOW_API_KEY:
-    raise RuntimeError("Missing ROBOFLOW_API_KEY in .env")
+_client = None
 
-client = InferenceHTTPClient(
-    api_url="https://serverless.roboflow.com",
-    api_key=ROBOFLOW_API_KEY,
-)
+def get_roboflow_client() -> InferenceHTTPClient:
+    global _client
+    if _client is None:
+        if not ROBOFLOW_API_KEY:
+            raise RuntimeError("Missing ROBOFLOW_API_KEY in .env")
+        _client = InferenceHTTPClient(
+            api_url="https://serverless.roboflow.com",
+            api_key=ROBOFLOW_API_KEY,
+        )
+    return _client
 
 firebase_initialized = False
 
@@ -509,7 +517,7 @@ def run_roboflow_cloud(frame) -> dict:
         send_frame = frame
         inv_scale = 1.0
 
-    result = client.run_workflow(
+    result = get_roboflow_client().run_workflow(
         workspace_name=WORKSPACE_NAME,
         workflow_id=WORKFLOW_ID,
         images={"image": send_frame},
@@ -881,8 +889,9 @@ def main():
 
     # WINDOW_KEEPRATIO = ต่อให้ลากขยายหน้าต่างเอง ภาพก็จะไม่ถูกยืดจนเพี้ยน
     # ขนาดจริงยังตั้งไม่ได้ตอนนี้ ต้องรอเห็นเฟรมแรกก่อน ถึงจะรู้สัดส่วนจริงของกล้อง (ดู _fit_window)
-    for cam in contexts:
-        cv2.namedWindow(cam.name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+    if ENABLE_DISPLAY:
+        for cam in contexts:
+            cv2.namedWindow(cam.name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
     print(f"[Gateway] Display box: {DISPLAY_WIDTH}x{int(DISPLAY_WIDTH * 9 / 16)} "
           f"(ปรับด้วย DISPLAY_WIDTH ใน .env — ภาพจะย่อให้พอดีกรอบนี้ โดยคงสัดส่วนเดิม)")
 
@@ -907,7 +916,7 @@ def main():
                     continue
 
                 # เห็นเฟรมแรกแล้ว = รู้สัดส่วนจริงของกล้องตัวนี้ ค่อยตั้งขนาดหน้าต่างให้ตรง
-                if not cam.window_sized:
+                if ENABLE_DISPLAY and not cam.window_sized:
                     _fit_window(cam, frame, cam_index, len(contexts))
                     cam.window_sized = True
 
@@ -922,7 +931,7 @@ def main():
                 with cam.lock:
                     annotated = cam.latest_annotated.copy() if cam.latest_annotated is not None else None
 
-                if annotated is not None:
+                if ENABLE_DISPLAY and annotated is not None:
                     h, w = frame.shape[:2]
                     ah, aw = annotated.shape[:2]
                     # 💡 3. ดักจับเงื่อนไขภาพว่างเปล่า (aw/ah เป็น 0) ป้องกันบั๊กหารด้วยศูนย์
@@ -931,8 +940,8 @@ def main():
                         small = cv2.resize(annotated, (int(aw * scale), int(ah * scale)))
                         sh, sw = small.shape[:2]
                         frame[0:sh, w - sw:w] = small
-
-                cv2.imshow(cam.name, frame)
+                if ENABLE_DISPLAY:
+                    cv2.imshow(cam.name, frame)
 
                 if clean_frame is None:
                     continue
@@ -945,13 +954,16 @@ def main():
                 )
                 cam.cloud_thread.start()
 
-            if cv2.waitKey(frame_ms) & 0xFF == ord("q"):
+            if ENABLE_DISPLAY and cv2.waitKey(frame_ms) & 0xFF == ord("q"):
                 break
+            else:
+                time.sleep(frame_ms / 1000)  # กัน loop ไม่ให้กิน CPU 100% ตอนไม่มีหน้าจอ
     finally:
         for cam in contexts:
             if cam.cap is not None:
                 cam.cap.release()
-        cv2.destroyAllWindows()
+        if ENABLE_DISPLAY: 
+            cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
