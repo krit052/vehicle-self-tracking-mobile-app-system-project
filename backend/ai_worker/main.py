@@ -1,20 +1,21 @@
 # New code cloud treading (Refactored & Stabilized)
+import config as cfg
+import tracking.tracker as trk
+import utils as utl
+import tracking.pairing as pr
 
-import os
 import re
 import time
 import json
 import base64
 import tempfile
 import threading
-from enum import Enum
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 from datetime import datetime, timezone
-from dotenv import load_dotenv
+
 
 from inference_sdk import InferenceHTTPClient
 from pymongo import MongoClient
@@ -26,47 +27,46 @@ from firebase_admin import credentials, messaging
 
 from cameras import Camera, resolve_active_cameras
 
-_HERE = Path(__file__).parent
-load_dotenv(_HERE / ".env")
+
 
 #สำหรับเปิด/ปิด Display window (หน้าต่างโชว์ภาพ) ถ้าไม่อยากให้โชว์ภาพให้ตั้งเป็น false
-ENABLE_DISPLAY = os.environ.get("ENABLE_DISPLAY", "true").strip().lower() == "true"
+ENABLE_DISPLAY = cfg.ENABLE_DISPLAY
 
 # 🛠️ 1. ดึงข้อมูลสภาพแวดล้อมพร้อมใส่ค่า Default ป้องกันแครช (Safe Environment Getters)
-ROBOFLOW_API_KEY = os.environ.get("ROBOFLOW_API_KEY", "")
-WORKSPACE_NAME = os.environ.get("WORKSPACE_NAME", "default-workspace")
-WORKFLOW_ID = os.environ.get("WORKFLOW_ID", "default-workflow")
+ROBOFLOW_API_KEY = cfg.ROBOFLOW_API_KEY
+WORKSPACE_NAME = cfg.WORKSPACE_NAME
+WORKFLOW_ID = cfg.WORKFLOW_ID
 # ชื่อกล้องจากคอลัมน์ CAMERA NAME_NEW ใน backend/cctv/RTSP-CCTV-new.csv (คั่นหลายตัวด้วย comma)
-ACTIVE_CAMERAS = os.environ.get("ACTIVE_CAMERAS", "")
+ACTIVE_CAMERAS = cfg.ACTIVE_CAMERAS
 # ใช้เฉพาะตอนทดสอบไฟล์วิดีโอ (จะถูกใช้ก็ต่อเมื่อ ACTIVE_CAMERAS ว่าง)
-RTSP_URL = os.environ.get("RTSP_URL", "")
+RTSP_URL = cfg.RTSP_URL
 
-SAMPLE_SECONDS = float(os.environ.get("SAMPLE_SECONDS", 1.0))
-PIXELS_PER_METER = float(os.environ.get("PIXELS_PER_METER", 50.0))
-NEAR_DISTANCE_M = float(os.environ.get("NEAR_DISTANCE_M", 1.2))
-ALERT_DISTANCE_M = float(os.environ.get("ALERT_DISTANCE_M", 5.0))
-ALERT_COOLDOWN_SECONDS = float(os.environ.get("ALERT_COOLDOWN_SECONDS", 30.0))
+SAMPLE_SECONDS = cfg.SAMPLE_SECONDS
+PIXELS_PER_METER = cfg.PIXELS_PER_METER
+NEAR_DISTANCE_M = cfg.NEAR_DISTANCE_M
+ALERT_DISTANCE_M = cfg.ALERT_DISTANCE_M
+ALERT_COOLDOWN_SECONDS = cfg.ALERT_COOLDOWN_SECONDS
 
 # ขนาดหน้าต่างแสดงผล (px) — ปรับให้ใหญ่ขึ้นถ้ามองไม่เห็น ไม่กระทบภาพที่ส่งไป AI
-DISPLAY_WIDTH = int(os.environ.get("DISPLAY_WIDTH", 1280))
+DISPLAY_WIDTH = cfg.DISPLAY_WIDTH
 
-TRACKER_MAX_DISTANCE_PX = float(os.environ.get("TRACKER_MAX_DISTANCE_PX", 300.0))
-TRACKER_TTL_FRAMES = int(os.environ.get("TRACKER_TTL_FRAMES", 5))
-PAIR_TTL_SECONDS = float(os.environ.get("PAIR_TTL_SECONDS", 30.0))
+TRACKER_MAX_DISTANCE_PX = cfg.TRACKER_MAX_DISTANCE_PX
+TRACKER_TTL_FRAMES = cfg.TRACKER_TTL_FRAMES
+PAIR_TTL_SECONDS = cfg.PAIR_TTL_SECONDS
 
-FIREBASE_SERVICE_ACCOUNT = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
-FCM_DEVICE_TOKEN = os.environ.get("FCM_DEVICE_TOKEN", "")
+FIREBASE_SERVICE_ACCOUNT = cfg.FIREBASE_SERVICE_ACCOUNT
+FCM_DEVICE_TOKEN = cfg.FCM_DEVICE_TOKEN
 
-MONGODB_URL = os.environ.get("MONGODB_URL", "")
-MONGO_NAME = os.environ.get("MONGO_NAME", "vehicle-tracking")
+MONGODB_URL = cfg.MONGODB_URL
+MONGO_NAME = cfg.MONGO_NAME
 
-TYPHOON_OCR_API_KEY = os.environ.get("TYPHOON_OCR_API_KEY", "")
-TYPHOON_OCR_MODEL = os.environ.get("TYPHOON_OCR_MODEL", "typhoon-ocr")
-TYPHOON_OCR_TASK_TYPE = os.environ.get("TYPHOON_OCR_TASK_TYPE", "default")
-TYPHOON_OCR_MAX_TOKENS = int(os.environ.get("TYPHOON_OCR_MAX_TOKENS", 16384))
-TYPHOON_OCR_TEMPERATURE = float(os.environ.get("TYPHOON_OCR_TEMPERATURE", 0.1))
-TYPHOON_OCR_TOP_P = float(os.environ.get("TYPHOON_OCR_TOP_P", 0.6))
-TYPHOON_OCR_REP_PENALTY = float(os.environ.get("TYPHOON_OCR_REP_PENALTY", 1.2))
+TYPHOON_OCR_API_KEY = cfg.TYPHOON_OCR_API_KEY
+TYPHOON_OCR_MODEL = cfg.TYPHOON_OCR_MODEL
+TYPHOON_OCR_TASK_TYPE = cfg.TYPHOON_OCR_TASK_TYPE
+TYPHOON_OCR_MAX_TOKENS = cfg.TYPHOON_OCR_MAX_TOKENS
+TYPHOON_OCR_TEMPERATURE = cfg.TYPHOON_OCR_TEMPERATURE
+TYPHOON_OCR_TOP_P = cfg.TYPHOON_OCR_TOP_P
+TYPHOON_OCR_REP_PENALTY = cfg.TYPHOON_OCR_REP_PENALTY
 
 _TYPHOON_OCR_URL = "https://api.opentyphoon.ai/v1/ocr"
 
@@ -185,195 +185,6 @@ def get_roboflow_client() -> InferenceHTTPClient:
 
 firebase_initialized = False
 
-class SimpleTrack:
-    def __init__(self, track_id: int, cls: str, center: Tuple[float, float], bbox: dict):
-        self.track_id = track_id
-        self.cls = cls
-        self.center = center
-        self.bbox = bbox
-        self.last_seen = time.time()
-        self.was_near_motorcycle = False
-        self.plate_text: str = "-"  # 💡 มีค่าตั้งต้นเป็น string ป้องกันการเจอบั๊กข้อมูลว่างเปล่า
-        self.age: int = 1
-        self.missed: int = 0
-
-class SimpleTracker:
-    def __init__(self, max_distance_px: float = 160, ttl_frames: int = 5):
-        self.max_distance_px = max_distance_px
-        self.ttl_frames = ttl_frames
-        self.next_id = 1
-        self.tracks: Dict[int, SimpleTrack] = {}
-
-    def update(self, detections: List[dict]) -> List[SimpleTrack]:
-        now = time.time()
-
-        for t in self.tracks.values():
-            t.missed += 1
-
-        stale_ids = [tid for tid, t in self.tracks.items() if t.missed > self.ttl_frames]
-        for tid in stale_ids:
-            del self.tracks[tid]
-
-        assigned_track_ids = set()
-        output_tracks = []
-
-        for det in detections:
-            cls = det.get("class")
-            center = bbox_bottom_center(det)
-            if center is None:
-                continue
-
-            best_track_id = None
-            best_distance = None
-
-            for track_id, track in self.tracks.items():
-                if track_id in assigned_track_ids or track.cls != cls:
-                    continue
-
-                dist = euclidean(center, track.center)
-                if best_distance is None or dist < best_distance:
-                    best_distance = dist
-                    best_track_id = track_id
-
-            if best_track_id is not None and best_distance is not None and best_distance <= self.max_distance_px:
-                track = self.tracks[best_track_id]
-                # 💡 รักษาข้อมูลป้ายทะเบียนเดิมเอาไว้ ไม่ให้หายไปกับการอัปเดตพิกัดเฟรมใหม่
-                old_plate = track.plate_text
-                track.center = center
-                track.bbox = det
-                track.last_seen = now
-                track.missed = 0
-                track.age += 1
-                if old_plate and old_plate != "-":
-                    track.plate_text = old_plate
-                assigned_track_ids.add(best_track_id)
-                output_tracks.append(track)
-            else:
-                track = SimpleTrack(
-                    track_id=self.next_id,
-                    cls=cls,
-                    center=center,
-                    bbox=det,
-                )
-                self.tracks[self.next_id] = track
-                assigned_track_ids.add(self.next_id)
-                output_tracks.append(track)
-                self.next_id += 1
-
-        return output_tracks
-
-class PairState(Enum):
-    RIDING = "riding"
-    DISMOUNTED = "dismounted"
-
-class PairRecord:
-    def __init__(self, person_id: int, motorcycle_id: int):
-        self.person_id = person_id
-        self.motorcycle_id = motorcycle_id
-        self.state = PairState.RIDING
-        self.alert_sent = False
-        self.last_dist_m = 0.0
-        self.plate_text = "-"  # 💡 บันทึกป้ายทะเบียนฝังไว้ในคู่ ป้องกันการเป็นค่าว่างตอนรถหายไปจากจอ
-        self.last_updated = time.time()
-
-class PairStateManager:
-    def __init__(self, ttl_seconds: float = 30.0):
-        self.pairs: Dict[Tuple[int, int], PairRecord] = {}
-        self.ttl_seconds = ttl_seconds
-
-    def _evict_stale(self):
-        now = time.time()
-        stale = [k for k, v in self.pairs.items() if now - v.last_updated > self.ttl_seconds]
-        for k in stale:
-            print(f"[PairState] Evict stale pair person={k[0]} moto={k[1]}")
-            del self.pairs[k]
-
-    def update(
-        self,
-        people: List[SimpleTrack],
-        motorcycles: List[SimpleTrack],
-        # license_plate_text: str = "",
-    ) -> List[dict]:
-        self._evict_stale()
-        now = time.time()
-        alerts: List[dict] = []
-
-        paired_person_ids = {k[0] for k in self.pairs}
-        paired_moto_ids = {k[1] for k in self.pairs}
-
-        # ── Step 1: อัปเดตข้อมูลคู่เดิมอย่างต่อเนื่อง (ไม่ใช้บรรทัด continue ตัดหน้าอีกต่อไป) ──
-        for (pid, mid), pair in list(self.pairs.items()):
-            person = next((p for p in people if p.track_id == pid), None)
-            moto = next((m for m in motorcycles if m.track_id == mid), None)
-
-            is_person_visible = person is not None and person.missed == 0
-            is_moto_visible = moto is not None and moto.missed == 0
-
-            # สืบทอดข้อมูลป้ายทะเบียนล่าสุดเข้าไปเก็บใน Pair ความทรงจำระยะยาว
-            if pair.plate_text == "-" and moto and getattr(moto, 'plate_text', "-") != "-":
-                # ถ้า AI อ่านป้ายได้และจับคู่ให้รถคันนี้แล้ว ให้อัปเดตเข้า Pair
-                pair.plate_text = moto.plate_text
-            # elif license_plate_text and is_moto_visible:
-            #     pair.plate_text = license_plate_text
-
-            if is_person_visible and is_moto_visible:
-                pair.last_updated = now
-                dist_m = euclidean(person.center, moto.center) / PIXELS_PER_METER
-                pair.last_dist_m = dist_m
-
-                if pair.state == PairState.RIDING:
-                    if dist_m > NEAR_DISTANCE_M:
-                        pair.state = PairState.DISMOUNTED
-                        print(f"[PairState] ({pid},{mid}) RIDING → DISMOUNTED dist={dist_m:.2f}m")
-                elif pair.state == PairState.DISMOUNTED:
-                    if dist_m <= NEAR_DISTANCE_M:
-                        pair.state = PairState.RIDING
-                        pair.alert_sent = False
-                        print(f"[PairState] ({pid},{mid}) DISMOUNTED → RIDING (returned)")
-            else:
-                # 💡 หากคนหรือรถหายไปชั่วคราว ให้คงระยะและสถานะล่าสุดไว้เพื่อประเมินผล Alert
-                if is_person_visible or is_moto_visible:
-                    pair.last_updated = now
-
-            # 🎯 ตรรกะประมวลผล ALERT ที่แยกตัวเป็นอิสระ ป้องกันการโดนหลุดข้ามค้าง
-            if pair.state == PairState.DISMOUNTED and pair.last_dist_m >= ALERT_DISTANCE_M:
-                if not pair.alert_sent:
-                    pair.alert_sent = True
-                    alerts.append({
-                        "status": f"ALERT: person moved {ALERT_DISTANCE_M}m+ from motorcycle",
-                        "distance_m": round(pair.last_dist_m, 2),
-                        "person_track_id": pid,
-                        "motorcycle_track_id": mid,
-                        "license_plate_text": pair.plate_text,
-                    })
-
-        # ── Step 2: จับคู่ใหม่ให้วัตถุที่ยังว่างอยู่ ──
-        unpaired_people = [p for p in people if p.track_id not in paired_person_ids]
-        unpaired_motos = [m for m in motorcycles if m.track_id not in paired_moto_ids]
-
-        used_moto_ids = set()
-        for person in unpaired_people:
-            nearest_moto: Optional[SimpleTrack] = None
-            nearest_dist_m = float("inf")
-
-            for moto in unpaired_motos:
-                if moto.track_id in used_moto_ids:
-                    continue
-                dist_m = euclidean(person.center, moto.center) / PIXELS_PER_METER
-                if dist_m < nearest_dist_m:
-                    nearest_dist_m = dist_m
-                    nearest_moto = moto
-
-            if nearest_moto is not None and nearest_dist_m <= NEAR_DISTANCE_M:
-                key = (person.track_id, nearest_moto.track_id)
-                record = PairRecord(person.track_id, nearest_moto.track_id)
-                if nearest_moto.plate_text != "-":
-                    record.plate_text = nearest_moto.plate_text
-                self.pairs[key] = record
-                used_moto_ids.add(nearest_moto.track_id)
-                print(f"[PairState] New pair person={person.track_id} moto={nearest_moto.track_id} dist={nearest_dist_m:.2f}m → RIDING")
-
-        return alerts
 
 class CameraContext:
     """สถานะแยกของกล้องแต่ละตัว: capture, tracker, คู่คน↔รถ, cooldown ของ FCM และภาพ annotate ล่าสุด"""
@@ -383,11 +194,11 @@ class CameraContext:
         self.name = camera.name
         self.url = camera.url
 
-        self.tracker = SimpleTracker(
+        self.tracker = trk.SimpleTracker(
             max_distance_px=TRACKER_MAX_DISTANCE_PX,
             ttl_frames=TRACKER_TTL_FRAMES,
         )
-        self.pair_state_manager = PairStateManager(ttl_seconds=PAIR_TTL_SECONDS)
+        self.pair_state_manager = pr.PairStateManager(ttl_seconds=PAIR_TTL_SECONDS)
 
         self.cap = None
         self.last_alert_sent_at = 0.0
@@ -405,9 +216,9 @@ def init_firebase():
     if not FIREBASE_SERVICE_ACCOUNT:
         return
     try:
-        sa_path = Path(FIREBASE_SERVICE_ACCOUNT)
+        sa_path = cfg.Path(FIREBASE_SERVICE_ACCOUNT)
         if not sa_path.is_absolute():
-            sa_path = (_HERE / sa_path).resolve()
+            sa_path = (cfg._HERE / sa_path).resolve()
         cred = credentials.Certificate(str(sa_path))
         firebase_admin.initialize_app(cred)
         firebase_initialized = True
@@ -479,18 +290,6 @@ def send_fcm_alert(cam: "CameraContext", payload: dict):
     except Exception as e:
         print("[Mongo] Failed to save notification:", repr(e))
 
-def euclidean(a: Tuple[float, float], b: Tuple[float, float]) -> float:
-    return float(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5)
-
-def bbox_bottom_center(det: dict) -> Optional[Tuple[float, float]]:
-    try:
-        x = float(det["x"])
-        y = float(det["y"])
-        h = float(det["height"])
-        return x, y + h / 2.0
-    except Exception:
-        return None
-
 def normalize_result(result):
     if isinstance(result, list) and len(result) > 0:
         return result[0]
@@ -543,19 +342,19 @@ def decode_output_image(output_image):
         print("[Display] Could not decode output image:", e)
         return None
 
-_MAX_FRAME_WIDTH = int(os.environ.get("MAX_FRAME_WIDTH", 1280))
+_MAX_FRAME_WIDTH = cfg._MAX_FRAME_WIDTH
 
-_PLATE_MIN_WIDTH = int(os.environ.get("PLATE_MIN_WIDTH", 40))
-_PLATE_MIN_HEIGHT = int(os.environ.get("PLATE_MIN_HEIGHT", 15))
-_PLATE_CONF_MIN = float(os.environ.get("PLATE_CONFIDENCE_MIN", 0.35))
-_PLATE_TEXT_MAX_CHARS = int(os.environ.get("PLATE_TEXT_MAX_CHARS", 25))
+_PLATE_MIN_WIDTH = cfg._PLATE_MIN_WIDTH
+_PLATE_MIN_HEIGHT = cfg._PLATE_MIN_HEIGHT
+_PLATE_CONF_MIN = cfg._PLATE_CONF_MIN
+_PLATE_TEXT_MAX_CHARS = cfg._PLATE_TEXT_MAX_CHARS
 # ป้ายที่อยู่ห่างจากรถทุกคันเกินระยะนี้ (px) ถือว่าไม่ใช่ป้ายของรถในเฟรม → ไม่ยกให้ใคร
 _PLATE_MAX_OWNER_DIST_PX = 250.0
 
 # 🐛 DEBUG: SAVE_PLATE=true จะเซฟภาพป้ายที่ crop ได้ลงโฟลเดอร์ plate_crops ไว้ดูว่า crop ตรงป้ายไหม
 # ปิดไว้ (false) เป็นค่าปกติ — เป็นแค่ตัวช่วย debug ไม่เกี่ยวกับการทำงานจริง เปิด/ปิดแล้วระบบทำงานเหมือนเดิม
-SAVE_PLATE = os.environ.get("SAVE_PLATE", "false").strip().lower() == "true"
-_PLATE_CROPS_DIR = _HERE / "plate_crops"
+SAVE_PLATE = cfg.SAVE_PLATE
+_PLATE_CROPS_DIR = cfg._PLATE_CROPS_DIR
 
 def _safe_filename(text: str) -> str:
     """ตัดอักขระที่ตั้งเป็นชื่อไฟล์บน Windows ไม่ได้ออก"""
@@ -700,7 +499,7 @@ def _plate_inside_bbox(px: float, py: float, bbox: dict, margin: float = 1.15) -
         return False
     return abs(px - cx) <= w / 2.0 and abs(py - cy) <= h / 2.0
 
-def find_plate_owner(tracks: List[SimpleTrack], plate_pred: dict) -> Optional[SimpleTrack]:
+def find_plate_owner(tracks: List[trk.SimpleTrack], plate_pred: dict) -> Optional[trk.SimpleTrack]:
     """
     หารถเจ้าของป้ายนี้:
       1. รถที่กรอบครอบจุดกึ่งกลางป้ายอยู่ ได้สิทธิ์ก่อน (ป้ายติดอยู่บนรถคันนั้นจริงๆ)
@@ -719,14 +518,14 @@ def find_plate_owner(tracks: List[SimpleTrack], plate_pred: dict) -> Optional[Si
 
     inside = [m for m in motorcycles if _plate_inside_bbox(px, py, m.bbox)]
     if inside:
-        return min(inside, key=lambda m: euclidean((px, py), m.center))
+        return min(inside, key=lambda m: utl.euclidean((px, py), m.center))
 
-    nearest = min(motorcycles, key=lambda m: euclidean((px, py), m.center))
-    if euclidean((px, py), nearest.center) > _PLATE_MAX_OWNER_DIST_PX:
+    nearest = min(motorcycles, key=lambda m: utl.euclidean((px, py), m.center))
+    if utl.euclidean((px, py), nearest.center) > _PLATE_MAX_OWNER_DIST_PX:
         return None
     return nearest
 
-def assign_plates_to_owners(cam_name: str, tracks: List[SimpleTrack], plate_reads: List[Tuple[dict, str]]) -> str:
+def assign_plates_to_owners(cam_name: str, tracks: List[trk.SimpleTrack], plate_reads: List[Tuple[dict, str]]) -> str:
     """ยกป้ายแต่ละกรอบให้ 'รถเจ้าของกรอบนั้น' ไม่ใช่ยกให้คันที่ใกล้ที่สุดเฉยๆ"""
     texts = []
     for pred, text in plate_reads:
@@ -741,13 +540,13 @@ def assign_plates_to_owners(cam_name: str, tracks: List[SimpleTrack], plate_read
         texts.append(text)
     return " | ".join(texts)
 
-def compute_distance_alerts(cam: "CameraContext", tracks: List[SimpleTrack]) -> List[dict]:
+def compute_distance_alerts(cam: "CameraContext", tracks: List[trk.SimpleTrack]) -> List[dict]:
     people = [t for t in tracks if t.cls == "person"]
     motorcycles = [t for t in tracks if t.cls == "motorcycle"]
     # ไม่ต้องส่ง plate_text เข้าไปแล้ว ปล่อยให้มันดึงจาก motorcycles[i].plate_text เอง
     return cam.pair_state_manager.update(people, motorcycles)
 
-def print_summary(cam: "CameraContext", output: dict, tracks: List[SimpleTrack]):
+def print_summary(cam: "CameraContext", output: dict, tracks: List[trk.SimpleTrack]):
     people = [t for t in tracks if t.cls == "person"]
     motorcycles = [t for t in tracks if t.cls == "motorcycle"]
     moto_colors = output.get("motorcycle_colors_rgb") or []
@@ -769,7 +568,7 @@ def print_summary(cam: "CameraContext", output: dict, tracks: List[SimpleTrack])
 
         dist_m = None
         if person and moto:
-            dist_m = round(euclidean(person.center, moto.center) / PIXELS_PER_METER, 2)
+            dist_m = round(utl.euclidean(person.center, moto.center) / PIXELS_PER_METER, 2)
         elif pair.last_dist_m > 0:
             dist_m = round(pair.last_dist_m, 2)
 
