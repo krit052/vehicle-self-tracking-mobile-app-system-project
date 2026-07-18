@@ -44,6 +44,7 @@ TYPHOON_OCR_MAX_TOKENS = int(os.environ.get("TYPHOON_OCR_MAX_TOKENS", 16384))
 TYPHOON_OCR_TEMPERATURE = float(os.environ.get("TYPHOON_OCR_TEMPERATURE", 0.1))
 TYPHOON_OCR_TOP_P = float(os.environ.get("TYPHOON_OCR_TOP_P", 0.6))
 TYPHOON_OCR_REP_PENALTY = float(os.environ.get("TYPHOON_OCR_REP_PENALTY", 1.2))
+_TYPHOON_OCR_URL = "https://api.opentyphoon.ai/v1/ocr"
 
 _MAX_FRAME_WIDTH = int(os.environ.get("MAX_FRAME_WIDTH", 1280))
 

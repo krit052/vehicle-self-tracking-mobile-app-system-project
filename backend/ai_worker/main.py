@@ -3,6 +3,7 @@ import config as cfg
 import tracking.tracker as trk
 import utils as utl
 import tracking.pairing as pr
+import ocr.typhoon as ty
 
 #ใช้ logging เพื่อเวลาเกิดปัญหาจะได้รู้ว่าปัญหาเกิดที่กล้องตัวไหน และเกิดเวลาไหน
 import logging
@@ -12,7 +13,6 @@ import re
 import time
 import json
 import base64
-import tempfile
 import threading
 from typing import Dict, List, Optional, Tuple
 
@@ -23,14 +23,11 @@ from datetime import datetime, timezone
 
 from inference_sdk import InferenceHTTPClient
 from pymongo import MongoClient
-import requests as _requests
-import difflib ##เพิ่ม difflib สำหรับการเปรียบเทียบข้อความ เวลา OCR อ่านป้ายทะเบียนผิดพลาดเล็กน้อย จะให้เทียบกับจังหวัดที่เคยเจอในฐานข้อมูล เพื่อให้สามารถจับคู่ได้แม่นยำขึ้น
-
 import firebase_admin
 from firebase_admin import credentials, messaging
 
 from cameras import Camera, resolve_active_cameras
-
+from frame_grabber import FrameGrabber #เพื่อให้สามารถดึงเฟรมจาก RTSP ได้ต่อเนื่องใน thread แยก และเก็บแค่เฟรมล่าสุดไว้ในตัวแปรเดียว
 
 
 #สำหรับเปิด/ปิด Display window (หน้าต่างโชว์ภาพ) ถ้าไม่อยากให้โชว์ภาพให้ตั้งเป็น false
@@ -74,94 +71,7 @@ TYPHOON_OCR_REP_PENALTY = cfg.TYPHOON_OCR_REP_PENALTY
 
 _TYPHOON_OCR_URL = "https://api.opentyphoon.ai/v1/ocr"
 
-# รายชื่อจังหวัด ในประเทศไทย (ใช้สำหรับการแก้ไขคำเพี้ยนของจังหวัดในป้ายทะเบียน)
-THAI_PROVINCES = [
-    "กระบี่", "กรุงเทพมหานคร", "กาญจนบุรี", "กาฬสินธุ์", "กำแพงเพชร", 
-    "ขอนแก่น", "จันทบุรี", "ฉะเชิงเทรา", "ชลบุรี", "ชัยนาท", 
-    "ชัยภูมิ", "ชุมพร", "เชียงราย", "เชียงใหม่", "ตรัง", 
-    "ตราด", "ตาก", "นครนายก", "นครปฐม", "นครพนม", 
-    "นครราชสีมา", "นครศรีธรรมราช", "นครสวรรค์", "นนทบุรี", "นราธิวาส", 
-    "น่าน", "บึงกาฬ", "บุรีรัมย์", "ปทุมธานี", "ประจวบคีรีขันธ์", 
-    "ปราจีนบุรี", "ปัตตานี", "พระนครศรีอยุธยา", "พะเยา", "พังงา", 
-    "พัทลุง", "พิจิตร", "พิษณุโลก", "เพชรบุรี", "เพชรบูรณ์", 
-    "แพร่", "ภูเก็ต", "มหาสารคาม", "มุกดาหาร", "แม่ฮ่องสอน", 
-    "ยโสธร", "ยะลา", "ร้อยเอ็ด", "ระนอง", "ระยอง", 
-    "ราชบุรี", "ลพบุรี", "ลำปาง", "ลำพูน", "เลย", 
-    "ศรีสะเกษ", "สกลนคร", "สงขลา", "สตูล", "สมุทรปราการ", 
-    "สมุทรสงคราม", "สมุทรสาคร", "สระแก้ว", "สระบุรี", "สิงห์บุรี", 
-    "สุโขทัย", "สุพรรณบุรี", "สุราษฎร์ธานี", "สุรินทร์", "หนองคาย", 
-    "หนองบัวลำภู", "อ่างทอง", "อำนาจเจริญ", "อุดรธานี", "อุตรดิตถ์", 
-    "อุทัยธานี", "อุบลราชธานี"
-]
 
-
-## ฟังก์ชันช่วยดักและแก้ไขคำเพี้ยนของจังหวัดในป้ายทะเบียน
-def clean_and_correct_plate(ocr_text: str) -> str:
-    """ ฟังก์ชันช่วยดักและแก้ไขคำเพี้ยนของจังหวัดในป้ายทะเบียน """
-    parts = ocr_text.split()
-    if len(parts) < 3:
-        return ocr_text # ถ้าข้อความอ่านมาไม่ครบ 3 ส่วน ให้คืนค่าเดิมไปก่อน
-        
-    prefix = parts[0]       # บรรทัดบน (เช่น "1กท")
-    raw_province = parts[1] # บรรทัดกลาง (เช่น "นจร้าวล")
-    suffix = parts[2]       # บรรทัดล่าง (เช่น "6761")
-    
-    # หาจังหวัดที่ใกล้เคียงที่สุดจากฐานข้อมูล THAI_PROVINCES
-    matches = difflib.get_close_matches(raw_province, THAI_PROVINCES, n=1, cutoff=0.4)
-    
-    if matches:
-        corrected_province = matches[0]
-        return f"{prefix} {corrected_province} {suffix}"
-    
-    return ocr_text
-
-
-# 🔐 2. ตัวควบคุมการเข้าถึงข้อมูลข้าม Thread ย้ายไปเป็น lock รายกล้องใน CameraContext แล้ว
-
-def _call_typhoon_ocr(img_np) -> str:
-    if not TYPHOON_OCR_API_KEY:
-        return ""
-    success, encoded = cv2.imencode(".jpg", img_np)
-    if not success:
-        return ""
-    try:
-        resp = _requests.post(
-            _TYPHOON_OCR_URL,
-            headers={"Authorization": f"Bearer {TYPHOON_OCR_API_KEY}"},
-            files={"file": ("plate.jpg", encoded.tobytes(), "image/jpeg")},
-            data={
-                "model": TYPHOON_OCR_MODEL,
-                "task_type": TYPHOON_OCR_TASK_TYPE,
-                "max_tokens": str(TYPHOON_OCR_MAX_TOKENS),
-                "temperature": str(TYPHOON_OCR_TEMPERATURE),
-                "top_p": str(TYPHOON_OCR_TOP_P),
-                "repetition_penalty": str(TYPHOON_OCR_REP_PENALTY),
-            },
-            timeout=30,
-        )
-        if resp.status_code != 200:
-            print(f"[TyphoonOCR] API error {resp.status_code}: {resp.text[:200]}")
-            return ""
-        
-        texts = []
-        for page in resp.json().get("results", []):
-            if not isinstance(page, dict):
-                continue
-            if page.get("success") and page.get("message"):
-                try:
-                    content = page["message"]["choices"][0]["message"]["content"]
-                except (KeyError, IndexError, TypeError, AttributeError):
-                    continue
-                try:
-                    text = json.loads(content).get("natural_text", content)
-                except (json.JSONDecodeError, TypeError, AttributeError):
-                    text = content
-                if text:
-                    texts.append(text.strip())
-        return "\n".join(texts).strip()
-    except Exception as e:
-        print("[TyphoonOCR] Connection error:", repr(e))
-        return ""
 
 _mongo_collection = None
 
@@ -204,7 +114,8 @@ class CameraContext:
         )
         self.pair_state_manager = pr.PairStateManager(ttl_seconds=PAIR_TTL_SECONDS)
 
-        self.cap = None
+        #เพิ่ม self.grabber แทน self.cap เพื่อให้สามารถดึงเฟรมจาก RTSP ได้ต่อเนื่องใน thread แยก และเก็บแค่เฟรมล่าสุดไว้ในตัวแปรเดียว
+        self.grabber = FrameGrabber(camera.url, camera.name)
         self.last_alert_sent_at = 0.0
         self.last_sample_at = 0.0
         self.cloud_thread: Optional[threading.Thread] = None
@@ -329,7 +240,9 @@ def run_roboflow_cloud(frame) -> dict:
     r = normalize_result(result)
     if inv_scale != 1.0:
         for key in ("license_plate_predictions", "raw_person_motorcycle_predictions"):
-            _scale_preds(r.get(key, {}).get("predictions", []), inv_scale)
+            #แก้ bug ที่เวลาไม่เจออะไรเลยจะแสดง error เพราะ r[key] เป็น None และถูกส่งไป prediction → แก้เป็น r.get(key) ถ้าไม่เจออะไรก็จะให้เป็น {} จะได้ไม่ error
+            block = r.get(key) or {}
+            _scale_preds(block.get("predictions", []), inv_scale)
     return r
 
 def decode_output_image(output_image):
@@ -390,20 +303,7 @@ def _save_plate_crop(cam_name: str, img_np, plate_text: str = ""):
     except Exception as e:
         print(f"[PlateCrop][{cam_name}] Save failed:", repr(e))
 
-_THAI_NON_PLATE_TERMS = re.compile(
-    r'ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.|ถนน|ถ\.|หมู่ที่|หมู่บ้าน|ซอย|แขวง|เขต|ทะเล|นิคม|เทศบาล|องค์การ|บริษัท|ห้างหุ้น'
-)
 
-def _filter_plate_text(raw: str) -> str:
-    lines = [l.strip() for l in raw.splitlines() if l.strip()]
-    kept = [
-        l for l in lines
-        if 2 <= len(l) <= _PLATE_TEXT_MAX_CHARS
-        # 💡 4. ปรับเปลี่ยนช่วงพิกัดสากลแบบสากล (\u0e00-\u0e7f ครอบคลุมอักษรไทยทั้งหมด)
-        and re.search(r'[\d\u0e00-\u0e7f]', l)
-        and not _THAI_NON_PLATE_TERMS.search(l)
-    ]
-    return " ".join(kept)
 
 def crop_plates_and_ocr(cam_name: str, frame, plate_predictions: List[dict]) -> List[Tuple[dict, str]]:
     """คืน [(กรอบป้าย, ข้อความที่อ่านได้), ...] — ต้องคืนกรอบมาด้วย คนเรียกจะได้รู้ว่าป้ายนี้เป็นของรถคันไหน"""
@@ -458,12 +358,12 @@ def crop_plates_and_ocr(cam_name: str, frame, plate_predictions: List[dict]) -> 
             else:
                 processed = cv2.resize(raw, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
 
-            raw_text = _call_typhoon_ocr(processed)
-            clean = _filter_plate_text(raw_text)
+            raw_text = ty._call_typhoon_ocr(processed)
+            clean = ty._filter_plate_text(raw_text)
 
             # ─── 🛠️ แทรกโค้ดใหม่ตรงนี้ ───
             # ส่งข้อความไปปรับคำจังหวัดให้ถูกต้องก่อนนำไปใช้งาน
-            clean = clean_and_correct_plate(clean)
+            clean = ty.clean_and_correct_plate(clean)
             # ─────────────────────────────
 
             # 🐛 DEBUG: เซฟภาพป้ายที่ crop ได้ (ทำงานเฉพาะตอน SAVE_PLATE=true)
@@ -600,16 +500,6 @@ def print_summary(cam: "CameraContext", output: dict, tracks: List[trk.SimpleTra
 
     print("====================================\n")
 
-def connect_rtsp(url: str):
-    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    if not cap.isOpened():
-        raise RuntimeError(
-            f"Could not open stream: {url}\n"
-            "Check URL, network, credentials, and camera permissions."
-        )
-    return cap
-
 def _cloud_worker(cam: CameraContext, frame):
     try:
         logger.info(f"[Cloud][{cam.name}] Sending frame to Roboflow...")
@@ -695,6 +585,7 @@ def main():
     if ENABLE_DISPLAY:
         for cam in contexts:
             cv2.namedWindow(cam.name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+            cam.grabber.start()
     print(f"[Gateway] Display box: {DISPLAY_WIDTH}x{int(DISPLAY_WIDTH * 9 / 16)} "
           f"(ปรับด้วย DISPLAY_WIDTH ใน .env — ภาพจะย่อให้พอดีกรอบนี้ โดยคงสัดส่วนเดิม)")
 
@@ -703,20 +594,12 @@ def main():
             for cam_index, cam in enumerate(contexts):
                 # อ่านเฟรมตรงนี้เหมือนเดิม (ไม่มี grabber thread) — ต่อกล้องแบบ lazy
                 # กล้องที่ยังต่อไม่ติดจะถูกข้ามไปก่อน ไม่ให้ล้มทั้งระบบ
-                if cam.cap is None:
-                    try:
-                        cam.cap = connect_rtsp(cam.url)
-                        print(f"[RTSP][{cam.name}] Connected")
-                    except Exception as e:
-                        print(f"[RTSP][{cam.name}] Connect failed:", repr(e))
-                        continue
-
-                ret, frame = cam.cap.read()
-                if not ret or frame is None:
-                    print(f"[RTSP][{cam.name}] Lost frame, reconnecting...")
-                    cam.cap.release()
-                    cam.cap = None
+                frame = cam.grabber.get_latest()
+                if frame is None:
+                    # ยังไม่มีเฟรมมาถึง (เพิ่ง start หรือกล้องกำลังต่อใหม่อยู่) — ข้ามรอบนี้ไปก่อน
                     continue
+
+
 
                 # เห็นเฟรมแรกแล้ว = รู้สัดส่วนจริงของกล้องตัวนี้ ค่อยตั้งขนาดหน้าต่างให้ตรง
                 if ENABLE_DISPLAY and not cam.window_sized:
@@ -757,14 +640,14 @@ def main():
                 )
                 cam.cloud_thread.start()
 
-            if ENABLE_DISPLAY and cv2.waitKey(frame_ms) & 0xFF == ord("q"):
-                break
+            if ENABLE_DISPLAY:
+                if cv2.waitKey(frame_ms) & 0xFF == ord("q"):
+                    break
             else:
                 time.sleep(frame_ms / 1000)  # กัน loop ไม่ให้กิน CPU 100% ตอนไม่มีหน้าจอ
     finally:
         for cam in contexts:
-            if cam.cap is not None:
-                cam.cap.release()
+            cam.grabber.stop()
         if ENABLE_DISPLAY: 
             cv2.destroyAllWindows()
 
