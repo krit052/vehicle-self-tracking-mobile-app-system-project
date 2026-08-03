@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
 import 'notifications_screen.dart';
+import 'login_screen.dart' show UserSession;
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -13,43 +14,83 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _dio = Dio(BaseOptions(baseUrl: 'http://localhost:8000'));
+  static const _baseUrl = 'http://localhost:8001';
+
   final _storage = const FlutterSecureStorage();
 
   Map<String, dynamic>? _user;
+  String? _userName;
   bool _loading = true;
-
-  // Threshold edit state
-  final _thresholdCtrl = TextEditingController();
-  bool _thresholdDirty = false;
-  bool _savingThreshold = false;
 
   @override
   void initState() {
     super.initState();
+    _initUser();
     _loadUser();
-    _thresholdCtrl.addListener(() => setState(() => _thresholdDirty = true));
   }
 
-  @override
-  void dispose() {
-    _thresholdCtrl.dispose();
-    super.dispose();
+  Future<String?> _getToken() async {
+    // ใช้ in-memory token ก่อน ถ้าไม่มีค่อยอ่านจาก secure storage
+    if (UserSession.instance.token != null) return UserSession.instance.token;
+    try {
+      return await _storage.read(key: 'jwt_token');
+    } catch (_) {
+      return null;
+    }
   }
 
-  Future<String?> get _token => _storage.read(key: 'jwt_token');
+  Future<void> _initUser() async {
+    final session = UserSession.instance;
+    if (session.user != null) {
+      if (mounted) setState(() => _userName = session.user!['name'] as String?);
+      return;
+    }
+    final token = session.token;
+    if (token == null) return;
+    try {
+      final res = await Dio(
+        BaseOptions(
+          baseUrl: _baseUrl,
+          headers: {'Authorization': 'Bearer $token'},
+          connectTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 5),
+        ),
+      ).get('/auth/me');
+      session.user = Map<String, dynamic>.from(res.data as Map);
+      if (mounted) setState(() => _userName = session.user!['name'] as String?);
+    } catch (_) {}
+  }
 
   Future<void> _loadUser() async {
-    try {
-      final token = await _token;
-      final res = await _dio.get(
-        '/users/me',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
+    // ถ้ามี user data ใน session แล้ว ใช้เลย ไม่ต้องเรียก API
+    if (UserSession.instance.user != null) {
       setState(() {
-        _user = Map<String, dynamic>.from(res.data);
-        _thresholdCtrl.text = (res.data['detection_threshold_min'] ?? 2).toString();
-        _thresholdDirty = false;
+        _user = UserSession.instance.user;
+        _loading = false;
+      });
+      return;
+    }
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      final res =
+          await Dio(
+            BaseOptions(
+              baseUrl: _baseUrl,
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          ).get(
+            '/auth/me',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          );
+      final user = Map<String, dynamic>.from(res.data);
+      UserSession.instance.user = user;
+      setState(() {
+        _user = user;
         _loading = false;
       });
     } catch (_) {
@@ -57,29 +98,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _saveThreshold() async {
-    final val = int.tryParse(_thresholdCtrl.text);
-    if (val == null || val < 1) {
-      _showSnack('Minimum is 1 minute', isError: true);
-      return;
-    }
-    setState(() => _savingThreshold = true);
+  Future<void> _showEditSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditProfileSheet(
+        initialName: _user?['name'] as String? ?? '',
+        initialEmail: _user?['email'] as String? ?? '',
+        onSave: _saveProfile,
+      ),
+    );
+  }
+
+  Future<void> _saveProfile(String name, String email) async {
+    final token = await _getToken();
+    if (token == null) return;
     try {
-      final token = await _token;
-      await _dio.patch(
-        '/users/me',
-        data: {'detection_threshold_min': val},
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-      setState(() {
-        _savingThreshold = false;
-        _thresholdDirty = false;
-        _user?['detection_threshold_min'] = val;
-      });
-      _showSnack('Threshold updated');
-    } catch (_) {
-      setState(() => _savingThreshold = false);
-      _showSnack('Failed to update', isError: true);
+      final res =
+          await Dio(
+            BaseOptions(
+              baseUrl: _baseUrl,
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          ).patch(
+            '/auth/profile',
+            data: {'name': name, 'email': email},
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          );
+      final updated = Map<String, dynamic>.from(res.data);
+      UserSession.instance.user = updated;
+      setState(() => _user = updated);
+      _showSnack('Profile updated');
+    } on DioException catch (e) {
+      final msg = e.response?.data?['detail']?.toString() ?? 'Update failed';
+      _showSnack(msg, isError: true);
     }
   }
 
@@ -104,22 +158,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (confirmed != true || !mounted) return;
 
-    await _storage.delete(key: 'jwt_token');
+    try {
+      await _storage.delete(key: 'jwt_token');
+    } catch (_) {}
+    UserSession.instance.token = null;
+    UserSession.instance.user = null;
+    if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
   }
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? AppColors.error : const Color(0xFF1E8A3E),
-    ));
-  }
-
-  // Extract student ID from MFU email (e.g. 6531234@lamduan.mfu.ac.th → 6531234)
-  String _studentId(String email) {
-    final local = email.split('@').first;
-    return RegExp(r'^\d+$').hasMatch(local) ? local : '—';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? AppColors.error : const Color(0xFF1E8A3E),
+      ),
+    );
   }
 
   String _initials(String name) {
@@ -134,9 +189,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _buildAppBar(),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : _buildBody(),
+      body: Column(
+        children: [
+          Expanded(child: _buildBody()),
+        ],
+      ),
     );
   }
 
@@ -144,22 +201,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return AppBar(
       backgroundColor: AppColors.primary,
       foregroundColor: AppColors.onPrimary,
-      title: const Text(
-        'MFU TRACKER',
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 1.5),
-      ),
       centerTitle: false,
-      leading: const Padding(
-        padding: EdgeInsets.all(12),
-        child: Icon(Icons.account_circle, color: AppColors.onPrimary),
+
+      leading: Padding(
+        padding: const EdgeInsets.all(10),
+        child: CircleAvatar(
+          backgroundColor: AppColors.primaryContainer,
+          child: Text(
+            _userName != null && _userName!.isNotEmpty
+                ? _userName![0].toUpperCase()
+                : '?',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.onPrimary,
+            ),
+          ),
+        ),
       ),
+
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'MFU TRACKER',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
+
+          if (_userName != null)
+            Text(
+              _userName!,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: AppColors.onPrimary,
+              ),
+            ),
+        ],
+      ),
+
       actions: [
+        IconButton(
+          onPressed: _showEditSheet,
+          icon: const Icon(Icons.edit_outlined, color: AppColors.onPrimary),
+          tooltip: 'Edit Profile',
+        ),
+
         IconButton(
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const NotificationsScreen()),
           ),
-          icon: const Icon(Icons.notifications_outlined, color: AppColors.onPrimary),
+          icon: const Icon(
+            Icons.notifications_outlined,
+            color: AppColors.onPrimary,
+          ),
           padding: const EdgeInsets.only(right: 8),
         ),
       ],
@@ -167,9 +268,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildBody() {
-    final displayName = _user?['display_name'] as String? ?? 'MFU Student';
-    final email       = _user?['email'] as String? ?? '';
-    final studentId   = _studentId(email);
+    final displayName = _user?['name'] as String? ?? 'MFU Student';
+    final email = _user?['email'] as String? ?? '';
+    final studentId = _user?['id'] as String? ?? '—';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
@@ -215,7 +316,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 4),
         Text(
           'Computer Engineering • MFU',
-          style: const TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant),
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -272,7 +376,11 @@ class _Card extends StatelessWidget {
   final IconData icon;
   final List<Widget> children;
 
-  const _Card({required this.title, required this.icon, required this.children});
+  const _Card({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +388,9 @@ class _Card extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,12 +454,20 @@ class _InfoTile extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant, letterSpacing: 0.4),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.onSurfaceVariant,
+                    letterSpacing: 0.4,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value.isEmpty ? '—' : value,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.onSurface),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.onSurface,
+                  ),
                 ),
               ],
             ),
@@ -357,7 +475,11 @@ class _InfoTile extends StatelessWidget {
           if (onCopy != null)
             IconButton(
               onPressed: onCopy,
-              icon: const Icon(Icons.copy_outlined, size: 16, color: AppColors.onSurfaceVariant),
+              icon: const Icon(
+                Icons.copy_outlined,
+                size: 16,
+                color: AppColors.onSurfaceVariant,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               tooltip: 'Copy',
@@ -373,6 +495,214 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Divider(height: 1, color: AppColors.outlineVariant, indent: 30);
+    return const Divider(
+      height: 1,
+      color: AppColors.outlineVariant,
+      indent: 30,
+    );
+  }
+}
+
+// ── Edit Profile Bottom Sheet ─────────────────────────────────────────────────
+
+class _EditProfileSheet extends StatefulWidget {
+  final String initialName;
+  final String initialEmail;
+  final Future<void> Function(String name, String email) onSave;
+
+  const _EditProfileSheet({
+    required this.initialName,
+    required this.initialEmail,
+    required this.onSave,
+  });
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _emailCtrl;
+  final _formKey = GlobalKey<FormState>();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName);
+    _emailCtrl = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await widget.onSave(_nameCtrl.text.trim(), _emailCtrl.text.trim());
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: AppColors.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Text(
+                  'Edit Profile',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _buildField(
+                  controller: _nameCtrl,
+                  label: 'Full Name',
+                  icon: Icons.person_outline,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Name is required'
+                      : null,
+                ),
+                const SizedBox(height: 14),
+                _buildField(
+                  controller: _emailCtrl,
+                  label: 'University Email',
+                  icon: Icons.mail_outline,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty)
+                      return 'Email is required';
+                    if (!v.contains('@')) return 'Enter a valid email';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          side: const BorderSide(
+                            color: AppColors.outlineVariant,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _saving ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryContainer,
+                          foregroundColor: AppColors.onPrimary,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.onPrimary,
+                                ),
+                              )
+                            : const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20, color: AppColors.onSurfaceVariant),
+        filled: true,
+        fillColor: AppColors.background,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(
+            color: AppColors.primaryContainer,
+            width: 1.5,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+      ),
+    );
   }
 }

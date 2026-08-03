@@ -20,6 +20,8 @@ class AppColors {
   static const outlineVariant = Color(0xFFE3BEB8);
   static const error = Color(0xFFBA1A1A);
   static const onError = Color(0xFFFFFFFF);
+  static const green = Color(0xFF4CAF50);
+  static const blue = Color(0xFF2196F3);
 }
 
 class AppTheme {

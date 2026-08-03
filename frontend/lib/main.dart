@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:provider/provider.dart';
+import 'package:media_kit/media_kit.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
+import 'screens/forgot_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/admin_home_screen.dart';
 import 'theme/app_theme.dart';
-import 'providers/firebase_messaging.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-
+void main() {
+  MediaKit.ensureInitialized();
   runApp(const MfuTrackerApp());
 }
 
@@ -18,18 +17,18 @@ class MfuTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => FirebaseMessagingProvider()..init(),
-      child: MaterialApp(
-        title: 'MFU Vehicle Tracker',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.theme,
-        initialRoute: '/login',
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/home': (context) => const HomeScreen(),
-        },
-      ),
+    return MaterialApp(
+      title: 'MFU Vehicle Tracker',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.theme,
+      initialRoute: '/login',
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegisterScreen(),
+        '/forgotpassword': (context) => const ForgotScreen(),
+        '/home': (context) => const HomeScreen(),
+        '/admin-home': (context) => const AdminHomeScreen(),
+      },
     );
   }
 }
