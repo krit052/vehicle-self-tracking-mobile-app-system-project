@@ -10,3 +10,4 @@ pymongo==4.17.0
 pydantic-settings==2.9.1
 python-dotenv==1.2.2
 cloudinary==1.44.2
+passlib[bcrypt]==1.7.4
