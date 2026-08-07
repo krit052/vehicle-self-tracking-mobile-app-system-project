@@ -90,9 +90,9 @@ OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", 5))
 OTP_PURPOSE_PASSWORD_RESET = "password_reset"
 CAMERAS_FILE = Path(__file__).parent.parent / "cameras.json"
 
-EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "resend").strip().lower()
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "")  # เช่น "MFU Tracker <no-reply@yourdomain.com>"
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "brevo").strip().lower()
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "")
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 client = MongoClient(MONGODB_URL)
@@ -207,10 +207,13 @@ def _find_password_reset_user(username: str, email: str) -> dict:
 
 
 def _send_password_reset_otp(to_email: str, otp: str) -> None:
-    if EMAIL_PROVIDER != "resend":
+    if EMAIL_PROVIDER != "brevo":
         raise HTTPException(status_code=500, detail="Unsupported email provider")
 
-    if not RESEND_API_KEY or not EMAIL_FROM:
+    brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
+    email_from = os.getenv("EMAIL_FROM", "").strip()
+
+    if not brevo_api_key or not email_from:
         raise HTTPException(status_code=500, detail="Email service is not configured")
 
     subject = "Vehicle Self-Tracking Password Reset OTP"
@@ -232,26 +235,29 @@ If you did not request a password reset, you can ignore this email.
     </div>
     """
 
+    payload = {
+        "sender": {"name": "MFU Tracker", "email": EMAIL_FROM},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "textContent": text_body,
+        "htmlContent": html_body,
+    }
+
     try:
         res = requests.post(
-            "https://api.resend.com/emails",
+            "https://api.brevo.com/v3/smtp/email",
             headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json",
+                "accept": "application/json",
+                "api-key": brevo_api_key,
+                "content-type": "application/json",
             },
-            json={
-                "from": EMAIL_FROM,
-                "to": [to_email],
-                "subject": subject,
-                "text": text_body,
-                "html": html_body,
-            },
+            json=payload,
             timeout=10,
         )
         if res.status_code >= 300:
             raise HTTPException(
                 status_code=500,
-                detail="Unable to send OTP email. Please try again later.",
+                detail=f"Unable to send OTP email. Brevo error: {res.text}",
             )
     except requests.RequestException:
         raise HTTPException(
