@@ -3,7 +3,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
@@ -32,16 +31,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   final _sheetController = DraggableScrollableController();
   final _storage = const FlutterSecureStorage();
 
+  // ตำแหน่งรถ = จุดที่กล้อง CCTV ตรวจจับป้ายได้ล่าสุด (ไม่ใช้ GPS มือถือแล้ว)
   LatLng? _currentPosition;
   List<_CameraMarkerData> _cameraMarkers = [];
   _CameraMarkerData? _selectedCamera;
-  double? _currentSpeed;
-  double? _currentAccuracy;
-  DateTime? _lastUpdate;
+  DateTime? _lastUpdate;        // เวลาที่กล้องเห็นล่าสุด
+  String? _detectedCamera;      // ชื่อกล้องที่เห็นล่าสุด
   bool _locationLoading = true;
   String? _locationError;
   bool _followUser = true;
-  StreamSubscription<Position>? _positionSub;
+  Timer? _pollTimer;
 
   bool _locked = false;
   bool _locking = false;
@@ -50,16 +49,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   late String _licensePlate = widget.licensePlate;
   bool _vehicleInfoLoading = false;
 
-  // ตำแหน่งล่าสุดที่กล้อง CCTV จับป้ายรถคันนี้ได้ (มาจาก backend /vehicles)
-  LatLng? _lastDetectionPoint;
-  String? _lastDetectionCamera;
-
   @override
   void initState() {
     super.initState();
-    _initLocation();
     _loadVehicleInfo();
     _loadCameraMarkers();
+    // ดึงตำแหน่งรถ (last_detection) ซ้ำทุก 10 วิ ให้หมุดขยับตามที่กล้องเห็นล่าสุด
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _loadVehicleInfo(),
+    );
   }
 
   Future<String?> _getToken() async {
@@ -113,7 +112,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   Future<void> _loadVehicleInfo() async {
     // final token = UserSession.instance.token;
     final token = await _getToken(); // เดิมใช้ UserSession.instance.token ตรงๆ
-    if (token == null) return;
+    if (token == null) {
+      if (mounted) setState(() => _locationLoading = false);
+      return;
+    }
     setState(() => _vehicleInfoLoading = true);
     try {
       final res = await Dio(
@@ -130,6 +132,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         orElse: () => <String, dynamic>{},
       );
       if (!mounted) return;
+      LatLng? detectedPoint;
       setState(() {
         if (vehicle['model'] != null) _vehicleName = vehicle['model'];
         if (vehicle['license_plate'] != null) {
@@ -137,127 +140,42 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         }
         // ✅ sync locked from backend/mongo
         _locked = (vehicle['locked'] as bool?) ?? false;
-        // ตำแหน่งล่าสุดที่กล้องจับป้ายได้ (ถ้ามี)
+        // ตำแหน่งรถ = จุดที่กล้อง CCTV ตรวจจับป้ายได้ล่าสุด
         final ld = vehicle['last_detection'];
         if (ld is Map) {
           final lat = (ld['latitude'] as num?)?.toDouble();
           final lon = (ld['longitude'] as num?)?.toDouble();
           if (lat != null && lon != null) {
-            _lastDetectionPoint = LatLng(lat, lon);
-            _lastDetectionCamera = ld['camera_name'] as String?;
+            detectedPoint = LatLng(lat, lon);
+            _currentPosition = detectedPoint;
+            _detectedCamera = ld['camera_name'] as String?;
+            final at = ld['at'] as String?;
+            _lastUpdate = at != null ? DateTime.tryParse(at) : DateTime.now();
           }
         }
+        _locationLoading = false;
+        _locationError = null;
         _vehicleInfoLoading = false;
       });
+      // ตามรถอัตโนมัติเมื่อได้ตำแหน่งใหม่ (จนกว่า user จะเลื่อนแผนที่เอง)
+      if (detectedPoint != null && _followUser) {
+        _mapController.move(detectedPoint!, 18);
+      }
     } on DioException {
       if (!mounted) return;
-      setState(() => _vehicleInfoLoading = false);
+      setState(() {
+        _locationLoading = false;
+        _vehicleInfoLoading = false;
+      });
     }
   }
 
   @override
   void dispose() {
-    _positionSub?.cancel();
+    _pollTimer?.cancel();
     _mapController.dispose();
     _sheetController.dispose();
     super.dispose();
-  }
-
-  Future<void> _initLocation() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() {
-        _locationError = 'Location services are disabled.';
-        _locationLoading = false;
-      });
-      return;
-    }
-
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      setState(() {
-        _locationError = 'Location permission denied.';
-        _locationLoading = false;
-      });
-      return;
-    }
-
-    try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-      _applyPosition(pos);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _locationError = 'Could not get location.';
-          _locationLoading = false;
-        });
-      }
-      return;
-    }
-
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 3,
-      ),
-    ).listen(_applyPosition, onError: (_) {});
-  }
-
-  void _applyPosition(Position pos) {
-    final point = LatLng(pos.latitude, pos.longitude);
-    if (!mounted) return;
-    setState(() {
-      _currentPosition = point;
-      _currentSpeed = pos.speed;
-      _currentAccuracy = pos.accuracy;
-      _lastUpdate = DateTime.now();
-      _locationLoading = false;
-      _locationError = null;
-    });
-    if (_followUser) {
-      _mapController.move(point, 18);
-    }
-    _sendLocationUpdate(pos);
-  }
-
-  Future<void> _sendLocationUpdate(Position pos) async {
-    final token = UserSession.instance.token;
-    if (token == null) {
-      debugPrint('[LiveTracking] skip location update: no token');
-      return;
-    }
-    try {
-      await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          headers: {'Authorization': 'Bearer $token'},
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-        ),
-      ).post(
-        '/vehicles/${widget.vehicleId}/location',
-        data: {
-          'latitude': pos.latitude,
-          'longitude': pos.longitude,
-          'speed': pos.speed,
-          'accuracy': pos.accuracy,
-        },
-      );
-      debugPrint('[LiveTracking] location update sent for ${widget.vehicleId}');
-    } on DioException catch (e) {
-      debugPrint(
-        '[LiveTracking] location update failed: ${e.message} '
-        '(status ${e.response?.statusCode}, body ${e.response?.data})',
-      );
-    }
   }
 
   void _centerOnUser() {
@@ -329,12 +247,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
     return '${diff.inHours}h ago';
-  }
-
-  String get _speedLabel {
-    if (_currentSpeed == null) return '—';
-    final kmh = _currentSpeed! * 3.6;
-    return '${kmh.toStringAsFixed(1)} km/h';
   }
 
   @override
@@ -444,25 +356,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                 );
               }).toList(),
             ),
-          if (_lastDetectionPoint != null)
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: _lastDetectionPoint!,
-                  width: 140,
-                  height: 56,
-                  child: _LastSeenMarker(cameraName: _lastDetectionCamera),
-                ),
-              ],
-            ),
           if (marker != null)
             MarkerLayer(
               markers: [
                 Marker(
                   point: marker,
-                  width: 56,
-                  height: 56,
-                  child: const _PulsingMarker(),
+                  width: 44,
+                  // สูงเป็น 2 เท่าของ pin แล้ววางไอคอนไว้ครึ่งบน → ปลาย pin ชี้ตรงจุด
+                  // (ตำแหน่งกล้อง) พอดี ส่วนตัว pin ลอยเหนือหมุดกล้อง ไม่ทับกัน
+                  height: 96,
+                  child: const _VehiclePin(),
                 ),
               ],
             ),
@@ -643,16 +546,20 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             children: [
               _InfoTile(
                 icon: Icons.access_time,
-                label: 'Updated',
+                label: 'Seen',
                 value: _lastUpdateLabel,
               ),
-              _InfoTile(icon: Icons.speed, label: 'Speed', value: _speedLabel),
               _InfoTile(
-                icon: Icons.radar,
-                label: 'Accuracy',
-                value: _currentAccuracy != null
-                    ? '±${_currentAccuracy!.toStringAsFixed(0)}m'
+                icon: Icons.videocam,
+                label: 'Camera',
+                value: (_detectedCamera != null && _detectedCamera!.isNotEmpty)
+                    ? _detectedCamera!
                     : '—',
+              ),
+              _InfoTile(
+                icon: Icons.check_circle_outline,
+                label: 'Status',
+                value: pos != null ? 'Detected' : '—',
               ),
             ],
           ),
@@ -733,7 +640,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                     _locationError = null;
                     _locationLoading = true;
                   });
-                  _initLocation();
+                  _loadVehicleInfo();
                 },
                 child: const Text(
                   'Retry',
@@ -748,41 +655,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _LastSeenMarker extends StatelessWidget {
-  final String? cameraName;
-  const _LastSeenMarker({this.cameraName});
-
-  @override
-  Widget build(BuildContext context) {
-    final label = (cameraName != null && cameraName!.isNotEmpty)
-        ? 'Last seen · $cameraName'
-        : 'Last seen by CCTV';
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppColors.blue,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const Icon(Icons.directions_car, color: AppColors.blue, size: 28),
-      ],
     );
   }
 }
@@ -857,77 +729,33 @@ class _CameraMapPin extends StatelessWidget {
   }
 }
 
-// ── Pulsing GPS Marker ────────────────────────────────────────────────────────
+// ── Vehicle Pin (ตำแหน่งรถที่กล้องตรวจจับ) ─────────────────────────────────────
+// pin เขียวลอยเหนือจุด ปลายชี้ที่ตำแหน่งกล้อง แยกออกจากหมุดกล้อง (สี primary) ชัดเจน
 
-class _PulsingMarker extends StatefulWidget {
-  const _PulsingMarker();
-
-  @override
-  State<_PulsingMarker> createState() => _PulsingMarkerState();
-}
-
-class _PulsingMarkerState extends State<_PulsingMarker>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
-    _pulse = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+class _VehiclePin extends StatelessWidget {
+  const _VehiclePin();
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
+    return Column(
+      mainAxisSize: MainAxisSize.max,
       children: [
-        AnimatedBuilder(
-          animation: _pulse,
-          builder: (_, __) => Container(
-            width: 56 * _pulse.value,
-            height: 56 * _pulse.value,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.primary.withValues(
-                alpha: (1 - _pulse.value) * 0.35,
-              ),
-            ),
-          ),
-        ),
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.primary, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.18),
-                blurRadius: 6,
+        SizedBox(
+          width: 44,
+          height: 46,
+          child: Stack(
+            alignment: Alignment.topCenter,
+            children: [
+              const Icon(Icons.location_on, size: 44, color: AppColors.green),
+              const Positioned(
+                top: 7,
+                child: Icon(Icons.motorcycle, size: 15, color: Colors.white),
               ),
             ],
           ),
-          child: const Icon(
-            Icons.person_pin_circle,
-            color: AppColors.primary,
-            size: 16,
-          ),
         ),
+        // ครึ่งล่างเว้นว่าง เพื่อให้ปลาย pin (ด้านบน) ตกที่จุดกึ่งกลาง = ตำแหน่งกล้อง
+        const Spacer(),
       ],
     );
   }

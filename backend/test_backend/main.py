@@ -317,6 +317,8 @@ def _camera_to_admin_dict(doc: dict) -> dict:
     public = _camera_to_public_dict(doc)
     public["rtsp_url"] = doc.get("rtsp_url", "")
     public["detection_zones"] = doc.get("detection_zones", [])
+    public["located"] = doc.get("located", True)
+    public["ip"] = doc.get("ip", "")
     return public
 
 
@@ -812,9 +814,30 @@ def mark_read(notification_id: str, current_user: dict = Depends(get_current_use
     return {"ok": True}
 
 
+@app.get("/internal/cameras")
+def internal_list_cameras(_: None = Depends(require_internal_secret)):
+    """ai_worker เรียกดึงรายชื่อกล้องจาก DB (แหล่งข้อมูลเดียว) แทนการอ่าน CSV
+    คืน field เทียบเท่า CSV เดิม: name, rtsp_url(=RTSP), position(=POSITION), ip"""
+    docs = cameras_col.find(sort=[("name", 1)])
+    return [
+        {
+            "name": d.get("name", ""),
+            "rtsp_url": d.get("rtsp_url", ""),
+            "position": d.get("location_name", ""),
+            "ip": d.get("ip", ""),
+            "latitude": d.get("latitude"),
+            "longitude": d.get("longitude"),
+            "status": d.get("status", "unknown"),
+        }
+        for d in docs
+    ]
+
+
 @app.get("/cameras")
 def get_cameras(current_user: dict = Depends(get_current_user)):
-    docs = cameras_col.find(sort=[("created_at", 1)])
+    # แสดงเฉพาะกล้องที่ปักพิกัดจริงแล้ว (located != False) เพื่อไม่ให้กล้องที่ import
+    # มาจาก CSV (ยังไม่ได้ปักพิกัด) ไปกองที่ placeholder บนแผนที่ user
+    docs = cameras_col.find({"located": {"$ne": False}}, sort=[("created_at", 1)])
     return [_camera_to_public_dict(doc) for doc in docs]
 
 
@@ -889,6 +912,9 @@ def admin_update_camera(
         update["latitude"] = req.latitude
     if req.longitude is not None:
         update["longitude"] = req.longitude
+    if req.latitude is not None or req.longitude is not None:
+        # ปักพิกัดจริงแล้ว → ให้กล้องนี้โผล่บนแผนที่ฝั่ง user
+        update["located"] = True
     if req.rtsp_url is not None:
         update["rtsp_url"] = req.rtsp_url.strip()
     if req.status is not None and req.status.strip():
@@ -1345,44 +1371,6 @@ def report_vehicle_exit_event(
         "distance_m": round(distance_m, 1),
         "notification_id": str(result.inserted_id),
     }
-
-
-class LocationUpdate(BaseModel):
-    latitude: float
-    longitude: float
-    speed: float | None = None
-    accuracy: float | None = None
-
-
-@app.post("/vehicles/{vehicle_id}/location")
-def update_location(
-    vehicle_id: str,
-    req: LocationUpdate,
-    current_user: dict = Depends(get_current_user),
-):
-    from bson import ObjectId
-
-    vehicle = vehicles_col.find_one(
-        {"_id": ObjectId(vehicle_id), "user_id": current_user["sub"]}
-    )
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Vehicle not found")
-
-    location = {
-        "vehicle_id": vehicle_id,
-        "user_id": current_user["sub"],
-        "latitude": req.latitude,
-        "longitude": req.longitude,
-        "speed": req.speed,
-        "accuracy": req.accuracy,
-        "created_at": datetime.now(timezone.utc),
-    }
-    db["locations"].insert_one(location)
-    vehicles_col.update_one(
-        {"_id": ObjectId(vehicle_id)},
-        {"$set": {"last_location": location}},
-    )
-    return {"ok": True}
 
 
 @app.get("/vehicles/{vehicle_id}/history")
