@@ -50,6 +50,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   late String _licensePlate = widget.licensePlate;
   bool _vehicleInfoLoading = false;
 
+  // ตำแหน่งล่าสุดที่กล้อง CCTV จับป้ายรถคันนี้ได้ (มาจาก backend /vehicles)
+  LatLng? _lastDetectionPoint;
+  String? _lastDetectionCamera;
+
   @override
   void initState() {
     super.initState();
@@ -133,6 +137,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         }
         // ✅ sync locked from backend/mongo
         _locked = (vehicle['locked'] as bool?) ?? false;
+        // ตำแหน่งล่าสุดที่กล้องจับป้ายได้ (ถ้ามี)
+        final ld = vehicle['last_detection'];
+        if (ld is Map) {
+          final lat = (ld['latitude'] as num?)?.toDouble();
+          final lon = (ld['longitude'] as num?)?.toDouble();
+          if (lat != null && lon != null) {
+            _lastDetectionPoint = LatLng(lat, lon);
+            _lastDetectionCamera = ld['camera_name'] as String?;
+          }
+        }
         _vehicleInfoLoading = false;
       });
     } on DioException {
@@ -250,16 +264,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     final target = _currentPosition ?? _mfuCenter;
     _mapController.move(target, 18);
     setState(() => _followUser = true);
-  }
-
-  void _centerOnFirstCamera() {
-    if (_cameraMarkers.isEmpty) return;
-    final camera = _selectedCamera ?? _cameraMarkers.first;
-    _mapController.move(camera.point, 18);
-    setState(() {
-      _selectedCamera = camera;
-      _followUser = false;
-    });
   }
 
   Future<void> _toggleLock() async {
@@ -439,6 +443,17 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                   ),
                 );
               }).toList(),
+            ),
+          if (_lastDetectionPoint != null)
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: _lastDetectionPoint!,
+                  width: 140,
+                  height: 56,
+                  child: _LastSeenMarker(cameraName: _lastDetectionCamera),
+                ),
+              ],
             ),
           if (marker != null)
             MarkerLayer(
@@ -733,6 +748,41 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LastSeenMarker extends StatelessWidget {
+  final String? cameraName;
+  const _LastSeenMarker({this.cameraName});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = (cameraName != null && cameraName!.isNotEmpty)
+        ? 'Last seen · $cameraName'
+        : 'Last seen by CCTV';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.blue,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const Icon(Icons.directions_car, color: AppColors.blue, size: 28),
+      ],
     );
   }
 }

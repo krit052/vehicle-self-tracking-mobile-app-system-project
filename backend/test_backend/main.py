@@ -33,6 +33,8 @@ from jose import jwt, JWTError
 from bson import ObjectId
 from bson.errors import InvalidId
 from datetime import datetime, timedelta, timezone
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
@@ -107,6 +109,47 @@ try:
     print(f"✅ Connected to MongoDB: {MONGODB_URL}{MONGO_NAME}")
 except Exception as e:
     print(f"❌ MongoDB connection failed: {e}")
+
+# ── Firebase Cloud Messaging (push) ───────────────────────────────────────────
+_FIREBASE_KEY = Path(__file__).parent.parent / "db_config" / "firebase-adminsdk-key-fbsvc-a8c8f167bd.json"
+_fcm_ready = False
+try:
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(credentials.Certificate(str(_FIREBASE_KEY)))
+    _fcm_ready = True
+    print("✅ Firebase Messaging initialized")
+except Exception as e:
+    print(f"⚠️ Firebase init failed (push disabled): {e}")
+
+
+def _push_to_user(user_id: str, title: str, body: str, data: dict | None = None) -> int:
+    """ส่ง FCM push ไปทุก device ของ user คนนี้ คืนจำนวนที่ส่งสำเร็จ
+    (ไม่ throw — push ล้มเหลวไม่ควรทำให้ endpoint พัง)"""
+    if not _fcm_ready:
+        return 0
+    try:
+        user = users_col.find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        return 0
+    tokens = (user or {}).get("device_tokens", []) or []
+    sent = 0
+    stale = []
+    for tok in tokens:
+        try:
+            messaging.send(messaging.Message(
+                token=tok,
+                notification=messaging.Notification(title=title, body=body),
+                data={k: str(v) for k, v in (data or {}).items()},
+            ))
+            sent += 1
+        except messaging.UnregisteredError:
+            stale.append(tok)  # token ตายแล้ว เก็บไว้ลบ
+        except Exception as e:
+            print(f"[FCM] send error: {e!r}")
+    if stale:
+        users_col.update_one({"_id": ObjectId(user_id)},
+                             {"$pull": {"device_tokens": {"$in": stale}}})
+    return sent
     raise
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -635,36 +678,137 @@ def update_profile(req: UpdateProfileRequest, current_user: dict = Depends(get_c
     }
 
 
+def _normalize_plate(s: str) -> str:
+    """ตัดช่องว่างทั้งหมดและทำเป็นตัวพิมพ์ใหญ่ เพื่อใช้เทียบป้ายข้ามฟอร์แมต
+    (ตัวพิมพ์ใหญ่ไม่กระทบอักษรไทย แต่ช่วยเวลาป้ายมีตัวอังกฤษ)"""
+    return "".join((s or "").split()).upper()
+
+
+def _ai_plate_matches(doc: dict, vehicle: dict) -> bool:
+    """เอกสาร notification จาก ai_worker เก็บป้ายเป็นสตริงเดียว จังหวัดอยู่กลาง
+    (เช่น "2กฏ เชียงราย 2026") ส่วน vehicles เก็บ license_plate ("2กฏ 2026")
+    กับ province ("เชียงราย") แยกช่อง — จึงตัดจังหวัดออกก่อนแล้วค่อยเทียบ"""
+    if not vehicle:
+        return False
+    province = (vehicle.get("province") or "").strip()
+    plate = vehicle.get("license_plate", "")
+    # ตัดจังหวัดออกจากทั้งสองฝั่งก่อนเทียบ (เผื่อฝั่ง vehicle กรอกจังหวัดปนในช่องป้าย)
+    target = _normalize_plate(plate.replace(province, " ") if province else plate)
+    if not target:
+        return False
+    raw = str(doc.get("license_plate_text") or "")
+    cleaned = raw.replace(province, " ") if province else raw
+    return _normalize_plate(cleaned) == target
+
+
+def _iso_z(dt) -> str | None:
+    """แปลง datetime เป็น ISO string ลงท้ายด้วย Z (บังคับเป็น UTC naive ก่อน
+    เพื่อไม่ให้ได้ค่าอย่าง '...+00:00Z' ที่ frontend parse ไม่ได้)"""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.isoformat() + "Z"
+
+
+class DeviceTokenBody(BaseModel):
+    token: str
+
+
+@app.post("/me/device-token")
+def save_device_token(body: DeviceTokenBody, current_user: dict = Depends(get_current_user)):
+    """แอปเรียกหลัง login เพื่อผูก FCM token ของเครื่องเข้ากับ user คนนี้"""
+    token = (body.token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token required")
+    users_col.update_one(
+        {"_id": ObjectId(current_user["sub"])},
+        {"$addToSet": {"device_tokens": token}},
+    )
+    return {"ok": True}
+
+
+@app.delete("/me/device-token")
+def delete_device_token(body: DeviceTokenBody, current_user: dict = Depends(get_current_user)):
+    """แอปเรียกตอน logout เพื่อเลิกรับ push บนเครื่องนี้"""
+    users_col.update_one(
+        {"_id": ObjectId(current_user["sub"])},
+        {"$pull": {"device_tokens": (body.token or "").strip()}},
+    )
+    return {"ok": True}
+
+
 @app.get("/notifications")
 def get_notifications(current_user: dict = Depends(get_current_user)):
     alerts_col = db["notifications"]
-    docs = alerts_col.find(
+    results = []
+
+    # 1) การแจ้งเตือนที่ backend สร้างเอง (มี user_id + created_at ครบ)
+    native = alerts_col.find(
         {"user_id": current_user["sub"]},
         sort=[("created_at", -1)],
         limit=50,
     )
-    results = []
-    for doc in docs:
+    for doc in native:
         results.append({
             "id": str(doc["_id"]),
             "alert_type": doc.get("alert_type", "INFO"),
             "snapshot_url": doc.get("snapshot_url", ""),
-            "created_at": doc["created_at"].isoformat() + "Z",
+            "created_at": _iso_z(doc.get("created_at")) or _iso_z(datetime.now(timezone.utc)),
             "read": doc.get("read", False),
+            "license_plate": "",
+            "camera_name": "",
         })
-    return results
+
+    # 2) การแจ้งเตือนจากตัวตรวจจับ AI (ai_worker เขียน Mongo ตรง ๆ ไม่มี user_id)
+    #    เชื่อมเข้ากับ user ด้วยการแมตช์ป้ายทะเบียนกับรถของ user เอง
+    vehicle = vehicles_col.find_one({"user_id": current_user["sub"]})
+    if vehicle:
+        ai_docs = alerts_col.find(
+            {"user_id": {"$exists": False}, "license_plate_text": {"$exists": True}},
+            sort=[("sent_at", -1)],
+            limit=50,
+        )
+        for doc in ai_docs:
+            if not _ai_plate_matches(doc, vehicle):
+                continue
+            results.append({
+                "id": str(doc["_id"]),
+                "alert_type": "PLATE_DETECTED",
+                "snapshot_url": doc.get("snapshot_url", ""),
+                "created_at": _iso_z(doc.get("sent_at")) or _iso_z(doc.get("created_at")) or _iso_z(datetime.now(timezone.utc)),
+                "read": doc.get("read", False),
+                "license_plate": str(doc.get("license_plate_text") or ""),
+                "camera_name": doc.get("camera_name", ""),
+            })
+
+    # รวมสองแหล่งแล้วเรียงใหม่-เก่า (ISO string ลงท้าย Z เรียงแบบ lexicographic ได้)
+    results.sort(key=lambda r: r["created_at"], reverse=True)
+    return results[:50]
 
 
 @app.patch("/notifications/{notification_id}/read")
 def mark_read(notification_id: str, current_user: dict = Depends(get_current_user)):
     from bson import ObjectId
     alerts_col = db["notifications"]
-    result = alerts_col.update_one(
-        {"_id": ObjectId(notification_id), "user_id": current_user["sub"]},
-        {"$set": {"read": True}},
-    )
-    if result.matched_count == 0:
+    try:
+        oid = ObjectId(notification_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid notification id")
+
+    doc = alerts_col.find_one({"_id": oid})
+    if not doc:
         raise HTTPException(status_code=404, detail="Notification not found")
+
+    # ตรวจความเป็นเจ้าของ: doc ของ backend ใช้ user_id, doc ของ AI ใช้การแมตช์ป้าย
+    owned = doc.get("user_id") == current_user["sub"]
+    if not owned and "user_id" not in doc:
+        vehicle = vehicles_col.find_one({"user_id": current_user["sub"]})
+        owned = _ai_plate_matches(doc, vehicle)
+    if not owned:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    alerts_col.update_one({"_id": oid}, {"$set": {"read": True}})
     return {"ok": True}
 
 
@@ -824,7 +968,24 @@ def _vehicle_to_dict(doc: dict) -> dict:
         "detection": doc.get("detection",1),
         "geofence_radius_m": doc.get("geofence_radius_m", 50),
         "locked": doc.get("locked", False),
-        "images": {slot: images.get(slot, "") for slot in IMAGE_SLOTS}
+        "images": {slot: images.get(slot, "") for slot in IMAGE_SLOTS},
+        "last_detection": _last_detection_public(doc.get("last_detection")),
+    }
+
+
+def _last_detection_public(ld: dict | None) -> dict | None:
+    """แปลง last_detection (ตำแหน่งกล้องที่ AI จับป้ายได้ล่าสุด) เป็นรูปแบบ JSON
+    ที่ frontend ใช้ได้ (เวลาเป็น ISO ...Z)"""
+    if not ld:
+        return None
+    at = ld.get("at")
+    if at is not None and getattr(at, "tzinfo", None) is not None:
+        at = at.astimezone(timezone.utc).replace(tzinfo=None)
+    return {
+        "camera_name": ld.get("camera_name", ""),
+        "latitude": ld.get("latitude"),
+        "longitude": ld.get("longitude"),
+        "at": (at.isoformat() + "Z") if at is not None else None,
     }
 
 
@@ -1054,6 +1215,73 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     )
     return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+class PlateDetectedEvent(BaseModel):
+    license_plate: str
+    province: str | None = None
+    camera_name: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    snapshot_url: str | None = None
+
+
+@app.post("/internal/plate-detected")
+def report_plate_detected(
+    event: PlateDetectedEvent,
+    _: None = Depends(require_internal_secret),
+):
+    """เรียกโดยระบบตรวจจับ AI ทุกครั้งที่ OCR อ่านป้ายได้ — backend จะ resolve
+    ป้าย → รถ → เจ้าของ แล้วสร้าง notification (schema เดียวกับของ backend)
+    พร้อมยิง FCM push เข้าเครื่องเจ้าของ ระบบ AI จึงไม่ต้องแตะ Mongo/Firebase เอง"""
+    plate = (event.license_plate or "").strip()
+    if not plate:
+        raise HTTPException(status_code=400, detail="license_plate required")
+
+    # แมตช์ป้ายกับรถทุกคัน (reuse _ai_plate_matches ที่ normalize + ตัดจังหวัดให้)
+    detected = {"license_plate_text": plate}
+    matches = [v for v in vehicles_col.find({}) if _ai_plate_matches(detected, v)]
+    if not matches:
+        return {"ok": True, "notified": 0, "reason": "no matching vehicle"}
+
+    # หาพิกัดของกล้องที่จับได้ (ใช้พิกัดกล้องเป็นตำแหน่งล่าสุดของรถ ถ้า event
+    # ไม่ได้ส่งพิกัดมาเอง) — เพื่อให้ frontend แสดงรถ ณ ตำแหน่งกล้องที่ตรวจเจอ
+    cam = cameras_col.find_one({"name": event.camera_name}) if event.camera_name else None
+    det_lat = event.latitude if event.latitude is not None else (cam or {}).get("latitude")
+    det_lon = event.longitude if event.longitude is not None else (cam or {}).get("longitude")
+
+    now = datetime.now(timezone.utc)
+    notified = 0
+    for vehicle in matches:
+        if det_lat is not None and det_lon is not None:
+            vehicles_col.update_one(
+                {"_id": vehicle["_id"]},
+                {"$set": {"last_detection": {
+                    "camera_name": event.camera_name or "",
+                    "latitude": det_lat,
+                    "longitude": det_lon,
+                    "at": now,
+                }}},
+            )
+        alert_type = "UNAUTHORIZED_MOVE" if vehicle.get("locked") else "PLATE_DETECTED"
+        db["notifications"].insert_one({
+            "user_id": vehicle["user_id"],
+            "alert_type": alert_type,
+            "snapshot_url": event.snapshot_url or "",
+            "license_plate": plate,
+            "camera_name": event.camera_name or "",
+            "created_at": now,
+            "read": False,
+        })
+        _push_to_user(
+            vehicle["user_id"],
+            "License Plate Detected",
+            plate + (f" @ {event.camera_name}" if event.camera_name else ""),
+            data={"alert_type": alert_type, "license_plate": plate,
+                  "camera_name": event.camera_name or ""},
+        )
+        notified += 1
+    return {"ok": True, "notified": notified}
 
 
 class VehicleExitEvent(BaseModel):

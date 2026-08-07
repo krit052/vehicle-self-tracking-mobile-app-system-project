@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
-import 'notifications_screen.dart';
+import '../widgets/notification_bell.dart';
 import 'login_screen.dart' show UserSession;
 
 class ProfileScreen extends StatefulWidget {
@@ -20,7 +20,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Map<String, dynamic>? _user;
   String? _userName;
-  bool _loading = true;
 
   @override
   void initState() {
@@ -66,14 +65,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (UserSession.instance.user != null) {
       setState(() {
         _user = UserSession.instance.user;
-        _loading = false;
       });
       return;
     }
     try {
       final token = await _getToken();
       if (token == null) {
-        setState(() => _loading = false);
         return;
       }
       final res =
@@ -91,11 +88,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       UserSession.instance.user = user;
       setState(() {
         _user = user;
-        _loading = false;
       });
-    } catch (_) {
-      setState(() => _loading = false);
-    }
+    } catch (_) {}
   }
 
   Future<void> _showEditSheet() async {
@@ -189,11 +183,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          Expanded(child: _buildBody()),
-        ],
-      ),
+      body: Column(children: [Expanded(child: _buildBody())]),
     );
   }
 
@@ -252,16 +242,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           tooltip: 'Edit Profile',
         ),
 
-        IconButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-          ),
-          icon: const Icon(
-            Icons.notifications_outlined,
-            color: AppColors.onPrimary,
-          ),
-          padding: const EdgeInsets.only(right: 8),
+        const NotificationBell(
+          color: AppColors.onPrimary,
+          padding: EdgeInsets.only(right: 8),
         ),
       ],
     );
@@ -603,8 +586,9 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                   icon: Icons.mail_outline,
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty)
+                    if (v == null || v.trim().isEmpty) {
                       return 'Email is required';
+                    }
                     if (!v.contains('@')) return 'Enter a valid email';
                     return null;
                   },

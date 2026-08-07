@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
+import '../providers/firebase_messaging.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -105,7 +106,7 @@ class _LoginCard extends StatefulWidget {
 class _LoginCardState extends State<_LoginCard> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   bool _passwordVisible = false;
   bool _loading = false;
 
@@ -363,7 +364,7 @@ class _LoginCardState extends State<_LoginCard> {
   }
 
   void _onOAuthLoginPressed(BuildContext context) {
-    // TODO: replace with real OAuth flow against Lamduan Mail
+    // replace with real OAuth flow against Lamduan Mail
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Redirecting to Lamduan Mail login...'),
@@ -383,11 +384,13 @@ class _LoginCardState extends State<_LoginCard> {
     setState(() => _loading = true);
     try {
       Response? res;
+      String? workingUrl;
       for (final url in _backendUrls) {
         try {
           res = await _makeDio(
             url,
           ).post('/auth/login', data: {'email': email, 'password': password});
+          workingUrl = url;
           break; // success — stop trying
         } on DioException catch (e) {
           debugPrint("========== DIO ==========");
@@ -413,6 +416,8 @@ class _LoginCardState extends State<_LoginCard> {
       } catch (_) {}
       UserSession.instance.token = token;
       UserSession.instance.role = role;
+      // ผูก FCM token ของเครื่องนี้กับ user (fire-and-forget ไม่บล็อกการนำทาง)
+      registerFcmToken(workingUrl ?? _backendUrls.first, token);
       if (!context.mounted) return;
       Navigator.pushReplacementNamed(
         context,
@@ -462,6 +467,7 @@ class UserSession {
   Map<String, dynamic>? user;
 }
 
+// ignore: unused_element  // เก็บไว้เผื่อเปิดใช้ footer ภายหลัง (ดู _Footer() ที่ถูกคอมเมนต์ไว้ด้านบน)
 class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
