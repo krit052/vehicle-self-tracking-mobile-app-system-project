@@ -87,7 +87,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 32),
                     _TitleSection(),
                     const SizedBox(height: 20),
-                    _RegisterCard(),
+                    _registerCard(),
                   ],
                 ),
               ),
@@ -98,7 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _RegisterCard() {
+  Widget _registerCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -264,7 +264,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     if (!mounted) return;
 
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(response.data["message"]), backgroundColor: AppColors.green),
+                      SnackBar(
+                        content: Text(response.data["message"]),
+                        backgroundColor: AppColors.green,
+                      ),
                     );
 
                     Navigator.pop(context);
@@ -277,9 +280,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     if (!mounted) return;
 
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.error));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(message),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
                   }
                 },
                 child: Text(

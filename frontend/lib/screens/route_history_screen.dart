@@ -5,7 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
-import 'notifications_screen.dart';
+import '../widgets/notification_bell.dart';
 
 class RouteHistoryScreen extends StatefulWidget {
   final String vehicleId;
@@ -228,16 +228,9 @@ class _RouteHistoryScreenState extends State<RouteHistoryScreen> {
         ],
       ),
       actions: [
-        IconButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-          ),
-          icon: const Icon(
-            Icons.notifications_outlined,
-            color: AppColors.onPrimary,
-          ),
-          padding: const EdgeInsets.only(right: 8),
+        const NotificationBell(
+          color: AppColors.onPrimary,
+          padding: EdgeInsets.only(right: 8),
         ),
       ],
     );

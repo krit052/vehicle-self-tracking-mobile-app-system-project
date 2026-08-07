@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "name": "ai_worker (Python 3.12)",
+      "path": "backend/ai_worker"
+    },
+    {
+      "name": "test_backend (Python 3.12)",
+      "path": "backend/test_backend"
+    },
+    {
+      "name": "vehicle-self-tracking-mobile-app (root)",
+      "path": "."
+    }
+  ],
+  "settings": {}
+}

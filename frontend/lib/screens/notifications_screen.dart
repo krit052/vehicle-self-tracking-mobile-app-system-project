@@ -324,6 +324,31 @@ class _AlertCard extends StatelessWidget {
                           height: 1.4,
                         ),
                       ),
+                      if (alert.licensePlate.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.pin_outlined,
+                              size: 12,
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                alert.cameraName.isNotEmpty
+                                    ? '${alert.licensePlate}  ·  ${alert.cameraName}'
+                                    : alert.licensePlate,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -357,6 +382,7 @@ class _AlertCard extends StatelessWidget {
     'MOVED' => const Color(0xFFE65100),
     'LOST' => AppColors.error,
     'UNAUTHORIZED_MOVE' => AppColors.error,
+    'PLATE_DETECTED' => AppColors.blue,
     _ => AppColors.onSurfaceVariant,
   };
 
@@ -364,6 +390,7 @@ class _AlertCard extends StatelessWidget {
     'MOVED' => 'Vehicle Moved',
     'LOST' => 'Vehicle Lost',
     'UNAUTHORIZED_MOVE' => 'Is This You?',
+    'PLATE_DETECTED' => 'License Plate Detected',
     _ => 'Vehicle Alert',
   };
 
@@ -372,6 +399,8 @@ class _AlertCard extends StatelessWidget {
     'LOST' => 'Your vehicle has disappeared from camera view.',
     'UNAUTHORIZED_MOVE' =>
       'Your vehicle left its zone without being unlocked. Confirm this was you.',
+    'PLATE_DETECTED' =>
+      'Your vehicle was detected by a campus CCTV camera.',
     _ => 'An alert was triggered for your vehicle.',
   };
 
@@ -409,6 +438,11 @@ class _AlertIcon extends StatelessWidget {
         const Color(0xFFFFEDED),
         AppColors.error,
       ),
+      'PLATE_DETECTED' => (
+        Icons.pin_outlined,
+        const Color(0xFFE3F2FD),
+        AppColors.blue,
+      ),
       _ => (
         Icons.notifications_outlined,
         AppColors.surfaceContainer,
@@ -435,6 +469,8 @@ class _AlertItem {
   final String snapshotUrl;
   final DateTime createdAt;
   final bool read;
+  final String licensePlate;
+  final String cameraName;
 
   const _AlertItem({
     required this.id,
@@ -442,6 +478,8 @@ class _AlertItem {
     required this.snapshotUrl,
     required this.createdAt,
     required this.read,
+    this.licensePlate = '',
+    this.cameraName = '',
   });
 
   factory _AlertItem.fromJson(Map<String, dynamic> json) => _AlertItem(
@@ -450,6 +488,8 @@ class _AlertItem {
     snapshotUrl: json['snapshot_url'] as String? ?? '',
     createdAt: DateTime.parse(json['created_at'] as String),
     read: json['read'] as bool? ?? false,
+    licensePlate: json['license_plate'] as String? ?? '',
+    cameraName: json['camera_name'] as String? ?? '',
   );
 
   _AlertItem copyWithRead(bool read) => _AlertItem(
@@ -458,5 +498,7 @@ class _AlertItem {
     snapshotUrl: snapshotUrl,
     createdAt: createdAt,
     read: read,
+    licensePlate: licensePlate,
+    cameraName: cameraName,
   );
 }

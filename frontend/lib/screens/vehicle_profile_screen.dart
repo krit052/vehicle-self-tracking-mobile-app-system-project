@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart' show UserSession;
-import 'notifications_screen.dart';
+import '../widgets/notification_bell.dart';
 
 const _baseUrl = 'http://localhost:8001';
 
@@ -200,16 +200,9 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
             ),
             tooltip: 'Add Vehicle',
           ),
-          IconButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-            ),
-            icon: const Icon(
-              Icons.notifications_outlined,
-              color: AppColors.onPrimary,
-            ),
-            padding: const EdgeInsets.only(right: 8),
+          const NotificationBell(
+            color: AppColors.onPrimary,
+            padding: EdgeInsets.only(right: 8),
           ),
         ],
       ),
@@ -420,6 +413,7 @@ class _VehicleCardState extends State<_VehicleCard> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to pick image: $e'),
@@ -828,7 +822,6 @@ class _DetectionThresholdCard extends StatefulWidget {
   final int detection;
 
   const _DetectionThresholdCard({
-    super.key,
     required this.vehicleId,
     required this.detection,
   });
@@ -922,7 +915,7 @@ class _DetectionThresholdCardState extends State<_DetectionThresholdCard> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: _selectedDelay,
+                  initialValue: _selectedDelay,
                   decoration: const InputDecoration(
                     labelText: 'Delay Time',
                     prefixIcon: Icon(Icons.timer_outlined),

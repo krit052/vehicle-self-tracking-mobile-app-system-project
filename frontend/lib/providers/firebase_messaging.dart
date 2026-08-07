@@ -1,10 +1,38 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 
 @pragma('vm:entry-point')
 Future<void> _onBackgroundMessage(RemoteMessage message) async {
   await Firebase.initializeApp();
+}
+
+/// เรียกหลัง login สำเร็จ: init Firebase, ขอ FCM token ของเครื่อง
+/// แล้วส่งให้ backend ผูกกับ user (POST /me/device-token)
+/// ห่อ try/catch ทั้งหมด — ถ้า platform ไม่รองรับหรือ backend ล่ม แอปต้องไม่พัง
+Future<void> registerFcmToken(String baseUrl, String jwt) async {
+  try {
+    await Firebase.initializeApp();
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
+    final token = await messaging.getToken();
+    if (token == null || token.isEmpty) return;
+    await Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ),
+    ).post(
+      '/me/device-token',
+      data: {'token': token},
+      options: Options(headers: {'Authorization': 'Bearer $jwt'}),
+    );
+    debugPrint('FCM token registered with backend');
+  } catch (e) {
+    debugPrint('FCM register failed: $e');
+  }
 }
 
 class FirebaseMessagingProvider extends ChangeNotifier {
