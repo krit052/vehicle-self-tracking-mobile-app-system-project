@@ -315,6 +315,24 @@ class _ForgotScreenState extends State<ForgotScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
             children: [
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.chevron_left),
+                  color: AppColors.onSurface,
+                  tooltip: 'Back',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
               Center(
                 child: Container(
                   width: 96,
