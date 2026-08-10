@@ -915,7 +915,7 @@ class _DetectionThresholdCardState extends State<_DetectionThresholdCard> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  initialValue: _selectedDelay,
+                  value: _selectedDelay,
                   decoration: const InputDecoration(
                     labelText: 'Delay Time',
                     prefixIcon: Icon(Icons.timer_outlined),
