@@ -142,16 +142,20 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         _locked = (vehicle['locked'] as bool?) ?? false;
         // ตำแหน่งรถ = จุดที่กล้อง CCTV ตรวจจับป้ายได้ล่าสุด
         final ld = vehicle['last_detection'];
-        if (ld is Map) {
-          final lat = (ld['latitude'] as num?)?.toDouble();
-          final lon = (ld['longitude'] as num?)?.toDouble();
-          if (lat != null && lon != null) {
-            detectedPoint = LatLng(lat, lon);
-            _currentPosition = detectedPoint;
-            _detectedCamera = ld['camera_name'] as String?;
-            final at = ld['at'] as String?;
-            _lastUpdate = at != null ? DateTime.tryParse(at) : DateTime.now();
-          }
+        final lat = (ld is Map) ? (ld['latitude'] as num?)?.toDouble() : null;
+        final lon = (ld is Map) ? (ld['longitude'] as num?)?.toDouble() : null;
+        if (ld is Map && lat != null && lon != null) {
+          detectedPoint = LatLng(lat, lon);
+          _currentPosition = detectedPoint;
+          _detectedCamera = ld['camera_name'] as String?;
+          final at = ld['at'] as String?;
+          _lastUpdate = at != null ? DateTime.tryParse(at) : DateTime.now();
+        } else {
+          // รถไม่ได้ถูกตรวจจับอยู่ (last_detection = null หรือหมดอายุจาก backend)
+          // → เอาหมุดรถออกจากแผนที่ (เช่น เมื่อรถถูกเอาออกไปแล้ว)
+          _currentPosition = null;
+          _detectedCamera = null;
+          _lastUpdate = null;
         }
         _locationLoading = false;
         _locationError = null;

@@ -9,6 +9,7 @@ import ocr.typhoon as ty
 import logging
 logger = logging.getLogger(__name__)
 
+import os
 import re
 import time
 import json
@@ -18,6 +19,7 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import requests
 from datetime import datetime, timezone
 
 
@@ -41,6 +43,10 @@ WORKFLOW_ID = cfg.WORKFLOW_ID
 ACTIVE_CAMERAS = cfg.ACTIVE_CAMERAS
 # ใช้เฉพาะตอนทดสอบไฟล์วิดีโอ (จะถูกใช้ก็ต่อเมื่อ ACTIVE_CAMERAS ว่าง)
 RTSP_URL = cfg.RTSP_URL
+
+# backend สำหรับแจ้ง "ตรวจเจอป้าย" (ต้องชี้ไปพอร์ตเดียวกับที่รัน test_backend = 8001)
+BACKEND_URL = os.environ.get("BACKEND_URL", "").rstrip("/")
+INTERNAL_SECRET = os.environ.get("INTERNAL_SECRET", "").strip()
 
 SAMPLE_SECONDS = cfg.SAMPLE_SECONDS
 PIXELS_PER_METER = cfg.PIXELS_PER_METER
@@ -141,19 +147,12 @@ def init_firebase():
         print("[FCM] Initialization failed:", repr(e))
 
 def send_fcm_alert(cam: "CameraContext", payload: dict):
-    if not FCM_DEVICE_TOKEN:
-        print("[FCM] Missing FCM_DEVICE_TOKEN, skipping")
-        return
-
-    # 💡 cooldown แยกรายกล้อง กล้องหนึ่ง alert แล้วต้องไม่ไปปิดปาก alert ของกล้องอื่น
+    # 💡 cooldown แยกรายกล้อง — กันแจ้งเตือนซ้ำถี่ ๆ (ใช้กับทั้ง in-app noti และ FCM)
     now = time.time()
     if now - cam.last_alert_sent_at < ALERT_COOLDOWN_SECONDS:
-        print(f"[FCM][{cam.name}] Cooldown active, skipping duplicate")
+        print(f"[Alert][{cam.name}] Cooldown active, skipping duplicate")
         return
-
-    init_firebase()
-    if not firebase_initialized:
-        return
+    cam.last_alert_sent_at = now
 
     plate_text = stringify(payload.get("license_plate_text", "-"))
     distance = payload.get("distance_m", "unknown")
@@ -164,27 +163,8 @@ def send_fcm_alert(cam: "CameraContext", payload: dict):
     if cam.camera.position:
         body += f" ({cam.camera.position})"
 
-    try:
-        message = messaging.Message(
-            token=FCM_DEVICE_TOKEN,
-            notification=messaging.Notification(title=title, body=body),
-            data={
-                "event": "motorcycle_left_area",
-                "camera_name": cam.name,
-                "camera_position": cam.camera.position,
-                "distance_m": str(distance),
-                "person_track_id": str(payload.get("person_track_id", "")),
-                "motorcycle_track_id": str(payload.get("motorcycle_track_id", "")),
-                "license_plate_text": plate_text,
-                "status": str(payload.get("status", "")),
-            },
-        )
-        response = messaging.send(message)
-        cam.last_alert_sent_at = now
-        print(f"[FCM][{cam.name}] Sent:", response)
-    except Exception as e:
-        print(f"[FCM][{cam.name}] Error sending message:", repr(e))
-
+    # 1) บันทึกลง Mongo "เสมอ" → frontend ดึงไปแสดงในรายการแจ้งเตือน (GET /notifications)
+    #    แยกจาก FCM push — ต่อให้ไม่มี FCM_DEVICE_TOKEN ก็ต้องเห็นแจ้งเตือนในแอป
     try:
         col = get_notifications_collection()
         if col is not None:
@@ -204,6 +184,52 @@ def send_fcm_alert(cam: "CameraContext", payload: dict):
             print(f"[Mongo][{cam.name}] Notification saved")
     except Exception as e:
         print("[Mongo] Failed to save notification:", repr(e))
+
+    # 2) ส่ง FCM push (ออปชัน) — ต้องมี FCM_DEVICE_TOKEN + firebase พร้อม
+    if not FCM_DEVICE_TOKEN:
+        print(f"[FCM][{cam.name}] Missing FCM_DEVICE_TOKEN, skipping push (บันทึกแจ้งเตือนแล้ว)")
+        return
+    init_firebase()
+    if not firebase_initialized:
+        return
+    try:
+        message = messaging.Message(
+            token=FCM_DEVICE_TOKEN,
+            notification=messaging.Notification(title=title, body=body),
+            data={
+                "event": "motorcycle_left_area",
+                "camera_name": cam.name,
+                "camera_position": cam.camera.position,
+                "distance_m": str(distance),
+                "person_track_id": str(payload.get("person_track_id", "")),
+                "motorcycle_track_id": str(payload.get("motorcycle_track_id", "")),
+                "license_plate_text": plate_text,
+                "status": str(payload.get("status", "")),
+            },
+        )
+        response = messaging.send(message)
+        print(f"[FCM][{cam.name}] Sent:", response)
+    except Exception as e:
+        print(f"[FCM][{cam.name}] Error sending message:", repr(e))
+
+def report_plate_detected(cam: "CameraContext", plate_text: str):
+    """แจ้ง backend ว่ากล้องตัวนี้อ่านป้ายนี้ได้ → backend จะจับคู่เจ้าของ,
+    ปักหมุดตำแหน่งรถ (พิกัดกล้อง) และแจ้งเตือน 'รถถูกตรวจจับ' ให้เจ้าของ
+    เรียกได้ทุกเฟรมที่อ่านป้ายได้ — backend กันแจ้งซ้ำ/รีเฟรชตำแหน่งให้เอง
+    (แยกหลายป้ายที่คั่นด้วย ' | ' แล้วส่งทีละใบ)"""
+    if not BACKEND_URL or not INTERNAL_SECRET:
+        return
+    for one in [p.strip() for p in (plate_text or "").split("|") if p.strip()]:
+        try:
+            requests.post(
+                f"{BACKEND_URL}/internal/plate-detected",
+                headers={"X-Internal-Secret": INTERNAL_SECRET},
+                json={"license_plate": one, "camera_name": cam.name},
+                timeout=5,
+            )
+        except Exception as e:
+            print(f"[Backend][{cam.name}] report plate '{one}' failed: {e!r}")
+
 
 def normalize_result(result):
     if isinstance(result, list) and len(result) > 0:
@@ -516,6 +542,8 @@ def _cloud_worker(cam: CameraContext, frame):
         plate_text = assign_plates_to_owners(cam.name, tracks, plate_reads)
         if plate_text:
             output["license_plate_text"] = plate_text
+            # แจ้ง backend ทุกครั้งที่อ่านป้ายได้ → แจ้งเตือน "รถถูกตรวจจับ" + ปักหมุดตำแหน่ง
+            report_plate_detected(cam, plate_text)
 
         alert_payloads = compute_distance_alerts(cam, tracks)
         print_summary(cam, output, tracks)

@@ -20,6 +20,8 @@ import random
 # import smtplib
 import requests
 import secrets
+import threading
+import time
 
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -104,6 +106,16 @@ CSV_NAME_COL, CSV_RTSP_COL, CSV_ENABLE_COL, CSV_POSITION_COL, CSV_IP_COL = (
 )
 # พิกัด placeholder = ใจกลาง มฟล. ตั้งตอน insert ครั้งแรก (located=False) รอ admin ปักจริง
 CAMERA_PLACEHOLDER_LAT, CAMERA_PLACEHOLDER_LON = 20.0459, 99.8934
+
+# ระยะเวลาที่ถือว่า "รถยังจอดอยู่ตรงกล้อง" นับจากครั้งล่าสุดที่กล้องเห็นป้าย
+# - ถ้ากล้องเห็นซ้ำภายในช่วงนี้ = ยังจอดอยู่ (หมุดค้าง, ไม่แจ้งเตือนซ้ำ)
+# - ถ้าเกินช่วงนี้ไม่เห็นเลย = รถออกไปแล้ว → หมุดหาย, ถ้ากลับมาเห็นใหม่ = แจ้งเตือน "มาจอด" อีกครั้ง
+# ตั้งให้ "ยาวกว่าช่วงห่างที่ OCR อ่านป้ายได้" (OCR อ่านได้เป็นช่วง ๆ ไม่ใช่ทุกวินาที)
+# ไม่งั้นช่องว่างระหว่างการอ่านจะถูกนับเป็น "มาจอดใหม่" แล้วแจ้งซ้ำ + หมุดกระพริบ
+# ยิ่งค่ามาก = แจ้งน้อยลง/หมุดนิ่ง แต่ตรวจ "รถออกจากกล้อง" (หมุดหาย/Is this you) ช้าลง
+DETECTION_PRESENCE_SECONDS = int(os.environ.get("DETECTION_PRESENCE_SECONDS", 900))
+# ทุกกี่วินาทีให้ background watcher เช็กว่ามีรถ locked ตัวไหน "หายไปจากกล้อง" แล้วบ้าง
+DEPARTURE_CHECK_SECONDS = int(os.environ.get("DEPARTURE_CHECK_SECONDS", 30))
 
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "brevo").strip().lower()
 BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
@@ -433,6 +445,70 @@ def _sync_cameras_from_csv() -> None:
             },
             upsert=True,
         )
+
+
+def _check_departed_locked_vehicles() -> None:
+    """หา 'รถที่ล็อกอยู่แล้วหายไปจากกล้อง' → ยิงแจ้งเตือน UNAUTHORIZED_MOVE ('Is this you?')
+    ครั้งเดียวต่อการหายไปหนึ่งครั้ง
+
+    เงื่อนไข: locked=True และเคยถูกกล้องเห็น (last_detection มี) แต่ไม่เห็นมานานเกิน
+    DETECTION_PRESENCE_SECONDS (= รถถูกเคลื่อนออกไปจากกล้อง) และยังไม่เคยเตือนการหายรอบนี้
+    (กันเตือนซ้ำด้วย flag last_detection.departed_alerted — จะรีเซ็ตเองเมื่อกล้องเห็นรถอีก
+    เพราะ /internal/plate-detected เขียน last_detection ก้อนใหม่ทับ)"""
+    now = datetime.now(timezone.utc)
+    now_naive = now.replace(tzinfo=None)
+    for v in vehicles_col.find({"locked": True, "last_detection": {"$ne": None}}):
+        ld = v.get("last_detection") or {}
+        at = ld.get("at")
+        if at is None or ld.get("departed_alerted"):
+            continue
+        if getattr(at, "tzinfo", None) is not None:
+            at = at.astimezone(timezone.utc).replace(tzinfo=None)
+        # ยังเห็นอยู่ (ยังจอด) → ไม่ใช่การหาย
+        if (now_naive - at).total_seconds() <= DETECTION_PRESENCE_SECONDS:
+            continue
+        db["notifications"].insert_one({
+            "user_id": v["user_id"],
+            "alert_type": "UNAUTHORIZED_MOVE",
+            "snapshot_url": "",
+            "license_plate": v.get("license_plate", ""),
+            "camera_name": ld.get("camera_name", ""),
+            "created_at": now,
+            "read": False,
+        })
+        _push_to_user(
+            v["user_id"],
+            "Is this you?",
+            (v.get("license_plate", "") +
+             (f" left {ld.get('camera_name')}" if ld.get("camera_name") else " left the camera") +
+             " while locked"),
+            data={"alert_type": "UNAUTHORIZED_MOVE",
+                  "license_plate": v.get("license_plate", ""),
+                  "camera_name": ld.get("camera_name", "")},
+        )
+        # กันเตือนซ้ำการหายรอบนี้ (จะถูกล้างเมื่อกล้องเห็นรถอีกครั้ง)
+        vehicles_col.update_one(
+            {"_id": v["_id"]},
+            {"$set": {"last_detection.departed_alerted": True}},
+        )
+        print(f"[departure-watcher] UNAUTHORIZED_MOVE → {v.get('license_plate','')} "
+              f"left {ld.get('camera_name','')}")
+
+
+def _departure_watcher_loop() -> None:
+    while True:
+        try:
+            _check_departed_locked_vehicles()
+        except Exception as e:
+            print(f"[departure-watcher] error: {e!r}")
+        time.sleep(DEPARTURE_CHECK_SECONDS)
+
+
+# background thread คอยเช็กรถ locked ที่หายไปจากกล้อง (daemon → ปิดพร้อมเซิร์ฟเวอร์)
+threading.Thread(target=_departure_watcher_loop, daemon=True,
+                 name="departure-watcher").start()
+print(f"✅ Departure watcher started (every {DEPARTURE_CHECK_SECONDS}s, "
+      f"presence window {DETECTION_PRESENCE_SECONDS}s)")
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -831,8 +907,8 @@ def get_notifications(current_user: dict = Depends(get_current_user)):
             "snapshot_url": doc.get("snapshot_url", ""),
             "created_at": _iso_z(doc.get("created_at")) or _iso_z(datetime.now(timezone.utc)),
             "read": doc.get("read", False),
-            "license_plate": "",
-            "camera_name": "",
+            "license_plate": str(doc.get("license_plate") or ""),
+            "camera_name": doc.get("camera_name", ""),
         })
 
     # 2) การแจ้งเตือนจากตัวตรวจจับ AI (ai_worker เขียน Mongo ตรง ๆ ไม่มี user_id)
@@ -1115,6 +1191,12 @@ def _last_detection_public(ld: dict | None) -> dict | None:
     at = ld.get("at")
     if at is not None and getattr(at, "tzinfo", None) is not None:
         at = at.astimezone(timezone.utc).replace(tzinfo=None)
+    # หมุดหายเมื่อรถออก: ถ้ากล้องไม่เห็นเกิน DETECTION_PRESENCE_SECONDS ถือว่ารถไม่อยู่แล้ว
+    # → คืน None เพื่อให้ frontend ไม่ปักหมุด (จนกว่าจะกลับมาเห็นใหม่)
+    if at is not None:
+        age = (datetime.now(timezone.utc).replace(tzinfo=None) - at).total_seconds()
+        if age > DETECTION_PRESENCE_SECONDS:
+            return None
     return {
         "camera_name": ld.get("camera_name", ""),
         "latitude": ld.get("latitude"),
@@ -1385,19 +1467,48 @@ def report_plate_detected(
     det_lon = event.longitude if event.longitude is not None else (cam or {}).get("longitude")
 
     now = datetime.now(timezone.utc)
+    now_naive = now.replace(tzinfo=None)
     notified = 0
+    refreshed = 0
     for vehicle in matches:
-        if det_lat is not None and det_lon is not None:
-            vehicles_col.update_one(
-                {"_id": vehicle["_id"]},
-                {"$set": {"last_detection": {
-                    "camera_name": event.camera_name or "",
-                    "latitude": det_lat,
-                    "longitude": det_lon,
-                    "at": now,
-                }}},
-            )
-        alert_type = "UNAUTHORIZED_MOVE" if vehicle.get("locked") else "PLATE_DETECTED"
+        # last_detection เดิม: เห็นล่าสุดเมื่อไหร่ + เคยแจ้ง "ตรวจเจอ" ในรอบจอดนี้ไปหรือยัง
+        prev = vehicle.get("last_detection") or {}
+        prev_at = prev.get("at")
+        if prev_at is not None and getattr(prev_at, "tzinfo", None) is not None:
+            prev_at = prev_at.astimezone(timezone.utc).replace(tzinfo=None)
+        # "ยังจอดต่อเนื่อง (รอบเดิม)" = เคยเห็น และเพิ่งเห็นภายใน DETECTION_PRESENCE_SECONDS
+        # OCR อ่านป้ายได้ห่าง ๆ → window ต้องยาวพอ ไม่งั้นจะนับเป็นรอบใหม่แล้วแจ้งซ้ำ
+        same_session = (
+            prev_at is not None
+            and (now_naive - prev_at).total_seconds() <= DETECTION_PRESENCE_SECONDS
+        )
+        # แจ้ง "รถถูกตรวจจับ" แค่ครั้งเดียวต่อการมาจอด 1 รอบ:
+        #   - รอบเดิม + เคยแจ้งแล้ว → ไม่แจ้งซ้ำ (แม้กล้องเห็นซ้ำอีกกี่ครั้ง)
+        #   - มาจอดรอบใหม่ (หายไปนานเกิน window แล้วกลับมา) → แจ้งได้อีก
+        already_notified = same_session and bool(prev.get("notified"))
+        should_notify = not already_notified
+
+        # อัปเดตตำแหน่ง + at + flag notified "เสมอ" → หมุดค้าง/ขยับตามกล้องที่เห็นล่าสุด
+        # และจำได้ว่าแจ้งไปแล้วในรอบนี้ (เขียนก้อนใหม่ทับ → departed_alerted ของ watcher หายเอง)
+        vehicles_col.update_one(
+            {"_id": vehicle["_id"]},
+            {"$set": {"last_detection": {
+                "camera_name": event.camera_name or "",
+                "latitude": det_lat,
+                "longitude": det_lon,
+                "at": now,
+                "notified": already_notified or should_notify,
+            }}},
+        )
+        refreshed += 1
+
+        if not should_notify:
+            continue
+
+        # การตรวจเจอป้าย = "รถถูกตรวจจับ" เสมอ (ไม่ใช่การเคลื่อนย้าย) → PLATE_DETECTED
+        # แม้รถจะอยู่สถานะ locked ก็ตาม — ส่วนแจ้งเตือน "เคลื่อนย้ายโดยไม่ได้รับอนุญาต"
+        # (UNAUTHORIZED_MOVE) อยู่ที่ background departure watcher / geofence แยกต่างหาก
+        alert_type = "PLATE_DETECTED"
         db["notifications"].insert_one({
             "user_id": vehicle["user_id"],
             "alert_type": alert_type,
@@ -1415,7 +1526,7 @@ def report_plate_detected(
                   "camera_name": event.camera_name or ""},
         )
         notified += 1
-    return {"ok": True, "notified": notified}
+    return {"ok": True, "notified": notified, "refreshed": refreshed}
 
 
 class VehicleExitEvent(BaseModel):

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/notification_bell.dart';
 import 'login_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -52,6 +53,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _alerts = data.map(_AlertItem.fromJson).toList();
         _loading = false;
       });
+      _syncUnreadBadge();
     } on DioException catch (e) {
       setState(() {
         _loading = false;
@@ -67,7 +69,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       setState(() {
         _alerts[index] = _alerts[index].copyWithRead(true);
       });
+      _syncUnreadBadge();
     } catch (_) {}
+  }
+
+  /// อัปเดตจำนวน unread เข้า NotificationCenter (แหล่งเดียว) → กระดิ่งทุกหน้าตรงกัน
+  void _syncUnreadBadge() {
+    NotificationCenter.instance.setUnread(
+      _alerts.where((a) => !a.read).length,
+    );
   }
 
   @override
