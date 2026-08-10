@@ -1,4 +1,4 @@
-package com.example.frontend
+package com.mfuvehicletracking
 
 import io.flutter.embedding.android.FlutterActivity
 

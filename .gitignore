@@ -8,6 +8,7 @@ __pycache__/
 # Env / secrets
 .env
 .env.*
+backend/db_config/firebase-adminsdk-key-fbsvc-a8c8f167bd.json
 
 # Flutter
 frontend/.dart_tool/
