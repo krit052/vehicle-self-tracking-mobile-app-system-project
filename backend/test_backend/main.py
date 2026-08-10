@@ -11,6 +11,7 @@ import os
 import bcrypt
 import cloudinary
 import cloudinary.uploader
+import csv
 import hashlib
 import hmac
 import json
@@ -91,6 +92,18 @@ OTP_EXPIRE_MINUTES = int(os.environ.get("OTP_EXPIRE_MINUTES", 5))
 OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", 5))
 OTP_PURPOSE_PASSWORD_RESET = "password_reset"
 CAMERAS_FILE = Path(__file__).parent.parent / "cameras.json"
+
+# แหล่งข้อมูลกล้อง = CSV เดียวกับที่ ai_worker ใช้ (backend/cctv/RTSP-CCTV-new.csv)
+# ai_worker อ่าน CSV ตรง ๆ ส่วน backend/admin จะ sync CSV → Mongo แล้วเก็บเฉพาะ
+# "พิกัดที่ปักหมุด" (latitude/longitude/located) ต่อยอดบน Mongo
+# → CSV เป็นตัวกำหนดว่ามีกล้องอะไรบ้าง (ชื่อตรงกับที่ใส่ใน ACTIVE_CAMERAS)
+#   ทั้งสองระบบจึงใช้ชื่อกล้องชุดเดียวกัน โยงหากันได้เองด้วยชื่อ
+CAMERA_CSV_PATH = (Path(__file__).parent.parent / "cctv" / "RTSP-CCTV-new.csv").resolve()
+CSV_NAME_COL, CSV_RTSP_COL, CSV_ENABLE_COL, CSV_POSITION_COL, CSV_IP_COL = (
+    "CAMERA NAME_NEW", "RTSP", "enable rtsp", "POSITION", "IP ADDRESS",
+)
+# พิกัด placeholder = ใจกลาง มฟล. ตั้งตอน insert ครั้งแรก (located=False) รอ admin ปักจริง
+CAMERA_PLACEHOLDER_LAT, CAMERA_PLACEHOLDER_LON = 20.0459, 99.8934
 
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "brevo").strip().lower()
 BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
@@ -366,6 +379,60 @@ def _seed_cameras_from_file_if_empty() -> None:
 
 
 _seed_cameras_from_file_if_empty()
+
+
+def _read_camera_csv_rows() -> list[dict]:
+    """อ่าน CSV กล้อง (ไฟล์เดียวกับที่ ai_worker ใช้) รองรับทั้ง utf-8 และ cp874
+    คืน [] ถ้าหาไฟล์ไม่เจอ/อ่านไม่ได้ (เพื่อไม่ให้ endpoint พังเวลาไม่มี CSV)"""
+    if not CAMERA_CSV_PATH.exists():
+        return []
+    for enc in ("utf-8-sig", "cp874"):
+        try:
+            with CAMERA_CSV_PATH.open("r", encoding=enc, newline="") as f:
+                return list(csv.DictReader(f))
+        except UnicodeDecodeError:
+            continue
+    return []
+
+
+def _sync_cameras_from_csv() -> None:
+    """upsert กล้องจาก CSV เข้า collection `cameras` (idempotent, key = ชื่อกล้อง)
+
+    - rtsp_url / ip = อัปเดตจาก CSV ทุกครั้ง (CSV เป็นเจ้าของสตรีม — ตรงกับที่ ai_worker ใช้)
+    - location_name / latitude / longitude / located / status / detection_zones
+      = ตั้งเฉพาะตอน insert ครั้งแรก (placeholder + located=False) แล้วปล่อยให้ admin
+      แก้/ปักหมุดจริงทีหลัง โดยไม่โดน sync เขียนทับ
+
+    เรียกตอน admin โหลดรายชื่อกล้อง เพื่อให้ชื่อที่เพิ่งเพิ่มใน CSV/ACTIVE_CAMERAS
+    โผล่มาให้ปักหมุดได้เอง โดยไม่ต้องแตะ ai_worker"""
+    now = datetime.now(timezone.utc)
+    for row in _read_camera_csv_rows():
+        name = (row.get(CSV_NAME_COL) or "").strip()
+        rtsp = (row.get(CSV_RTSP_COL) or "").strip()
+        enabled = (row.get(CSV_ENABLE_COL) or "").strip().lower() == "ok"
+        if not name or not rtsp or not enabled:
+            continue
+        cameras_col.update_one(
+            {"name": name},
+            {
+                "$set": {
+                    "rtsp_url": rtsp,
+                    "ip": (row.get(CSV_IP_COL) or "").strip(),
+                    "source": "csv-import",
+                },
+                "$setOnInsert": {
+                    "location_name": (row.get(CSV_POSITION_COL) or "").strip(),
+                    "latitude": CAMERA_PLACEHOLDER_LAT,
+                    "longitude": CAMERA_PLACEHOLDER_LON,
+                    "located": False,
+                    "status": "active",
+                    "detection_zones": [],
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            },
+            upsert=True,
+        )
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -875,27 +942,62 @@ class DetectionZonesUpdate(BaseModel):
 
 @app.get("/admin/cameras")
 def admin_list_cameras(current_user: dict = Depends(require_admin)):
+    # คืนเฉพาะกล้องที่มีใน Mongo (= ที่ปักหมุดผ่าน dropdown แล้ว) — เร็ว ไม่ sync ที่นี่
+    # รายชื่อกล้องทั้งหมดให้เลือกปักอยู่ที่ GET /admin/csv-cameras (อ่าน CSV ตรง)
     docs = cameras_col.find(sort=[("created_at", 1)])
     return [_camera_to_admin_dict(doc) for doc in docs]
+
+
+@app.get("/admin/csv-cameras")
+def admin_list_csv_cameras(current_user: dict = Depends(require_admin)):
+    """คืนรายชื่อกล้องจาก CSV ตรง ๆ (name + rtsp_url + position) สำหรับทำ dropdown
+    ให้ admin เลือกมาปักหมุด — ไม่ผูกกับสถานะใน Mongo จึงเห็นครบทุกตัวเสมอ
+    (แต่ติด flag `pinned` ให้ด้วยถ้าเช็ค Mongo ได้ เพื่อกันเลือกตัวที่ปักไปแล้วซ้ำ)"""
+    try:
+        pinned = {d["name"] for d in cameras_col.find({"located": True}, {"name": 1})}
+    except Exception as e:
+        print(f"[cameras] pinned-check skipped: {e!r}")
+        pinned = set()
+    out = []
+    for row in _read_camera_csv_rows():
+        name = (row.get(CSV_NAME_COL) or "").strip()
+        rtsp = (row.get(CSV_RTSP_COL) or "").strip()
+        enabled = (row.get(CSV_ENABLE_COL) or "").strip().lower() == "ok"
+        if not name or not rtsp or not enabled:
+            continue
+        out.append({
+            "name": name,
+            "rtsp_url": rtsp,
+            "position": (row.get(CSV_POSITION_COL) or "").strip(),
+            "pinned": name in pinned,
+        })
+    return out
 
 
 @app.post("/admin/cameras")
 def admin_create_camera(req: CameraCreate, current_user: dict = Depends(require_admin)):
     now = datetime.now(timezone.utc)
-    doc = {
-        "name": req.name.strip() or "Camera",
-        "location_name": req.location_name.strip(),
-        "latitude": req.latitude,
-        "longitude": req.longitude,
-        "rtsp_url": req.rtsp_url.strip(),
-        "status": "active",
-        "detection_zones": [],
-        "created_at": now,
-        "updated_at": now,
-    }
-    result = cameras_col.insert_one(doc)
-    doc["_id"] = result.inserted_id
-    return _camera_to_admin_dict(doc)
+    name = req.name.strip() or "Camera"
+    # upsert ด้วย "ชื่อกล้อง" → ปักหมุดกล้องจาก CSV โดยไม่สร้าง doc ซ้ำ
+    # (ถ้ากล้องชื่อนี้เคย sync/สร้างไว้แล้ว จะอัปเดตตัวเดิมให้ located=True)
+    cameras_col.update_one(
+        {"name": name},
+        {
+            "$set": {
+                "name": name,
+                "location_name": req.location_name.strip(),
+                "latitude": req.latitude,
+                "longitude": req.longitude,
+                "rtsp_url": req.rtsp_url.strip(),
+                "located": True,
+                "status": "active",
+                "updated_at": now,
+            },
+            "$setOnInsert": {"detection_zones": [], "created_at": now},
+        },
+        upsert=True,
+    )
+    return _camera_to_admin_dict(cameras_col.find_one({"name": name}))
 
 
 @app.patch("/admin/cameras/{camera_id}")

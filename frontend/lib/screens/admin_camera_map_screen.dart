@@ -83,7 +83,11 @@ class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
     try {
       final res = await _dio(token).get('/admin/cameras');
       final cameras = (res.data as List)
-          .map((item) => AdminCameraData.fromJson(Map<String, dynamic>.from(item as Map)))
+          .map(
+            (item) => AdminCameraData.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList();
       if (!mounted) return;
       setState(() {
@@ -94,65 +98,135 @@ class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.response?.data?['detail']?.toString() ?? 'Could not load cameras.';
+        _error =
+            e.response?.data?['detail']?.toString() ??
+            'Could not load cameras.';
       });
     }
   }
 
   Future<void> _addCameraAt(LatLng point) async {
-    final result = await showDialog<(String, String)>(
+    final token = await _getToken();
+    if (token == null) return;
+
+    // ดึงรายชื่อกล้องจาก CSV ตรง ๆ (ไม่พึ่งสถานะ sync ใน Mongo → เห็นครบเสมอ)
+    List<Map<String, dynamic>> csvCams;
+    try {
+      final res = await _dio(token).get('/admin/csv-cameras');
+      csvCams =
+          (res.data as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .where((e) => e['pinned'] != true) // ตัดตัวที่ปักไปแล้วออก
+              .toList()
+            ..sort(
+              (a, b) => (a['name'] as String).toLowerCase().compareTo(
+                (b['name'] as String).toLowerCase(),
+              ),
+            );
+    } on DioException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.response?.data?['detail']?.toString() ??
+                'โหลดรายชื่อกล้องจาก CSV ไม่ได้',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    if (csvCams.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กล้องทุกตัวจาก CSV ถูกปักหมุดแล้ว')),
+      );
+      return;
+    }
+
+    final selected = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) {
-        final nameController = TextEditingController();
-        final rtspController = TextEditingController();
-        return AlertDialog(
-          title: const Text('Add Camera'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                decoration: const InputDecoration(hintText: 'Camera name'),
+        Map<String, dynamic>? choice;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final rtsp = (choice?['rtsp_url'] as String?) ?? '';
+            return AlertDialog(
+              title: const Text('ปักหมุดกล้อง'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'จุดที่เลือก: ${point.latitude.toStringAsFixed(5)}, '
+                    '${point.longitude.toStringAsFixed(5)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButton<Map<String, dynamic>>(
+                    isExpanded: true,
+                    value: choice,
+                    hint: const Text('เลือกกล้อง (จาก CSV)'),
+                    items: csvCams.map((c) {
+                      final pos = (c['position'] as String?) ?? '';
+                      return DropdownMenuItem(
+                        value: c,
+                        child: Text(
+                          pos.isNotEmpty ? '${c['name']} · $pos' : '${c['name']}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (v) => setDialogState(() => choice = v),
+                  ),
+                  if (choice != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      rtsp.isNotEmpty ? 'RTSP: $rtsp' : 'RTSP: (ไม่มีใน CSV)',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: rtspController,
-                decoration: const InputDecoration(
-                  hintText: 'RTSP URL (optional)',
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(
-                context,
-                (nameController.text.trim(), rtspController.text.trim()),
-              ),
-              child: const Text('Add'),
-            ),
-          ],
+                TextButton(
+                  onPressed: choice == null
+                      ? null
+                      : () => Navigator.pop(context, choice),
+                  child: const Text('ปักหมุด'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
-    if (result == null || result.$1.isEmpty || !mounted) return;
-    final (name, rtspUrl) = result;
 
-    final token = await _getToken();
-    if (token == null) return;
+    if (selected == null || !mounted) return;
+
     try {
+      // upsert ด้วยชื่อกล้อง (backend กันซ้ำให้) → located=True
       await _dio(token).post(
         '/admin/cameras',
         data: {
-          'name': name,
+          'name': selected['name'],
           'latitude': point.latitude,
           'longitude': point.longitude,
-          if (rtspUrl.isNotEmpty) 'rtsp_url': rtspUrl,
+          'rtsp_url': selected['rtsp_url'] ?? '',
+          'location_name': selected['position'] ?? '',
         },
       );
       AdminCameraSync.instance.notifyChanged();
@@ -161,7 +235,7 @@ class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            e.response?.data?['detail']?.toString() ?? 'Could not add camera.',
+            e.response?.data?['detail']?.toString() ?? 'ปักหมุดไม่สำเร็จ',
           ),
           backgroundColor: AppColors.error,
         ),
@@ -206,7 +280,10 @@ class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
                   userAgentPackageName: 'com.mfu.vehicletracker',
                 ),
                 MarkerLayer(
+                  // แสดงเฉพาะกล้องที่ปักหมุดจริงแล้ว — กล้องจาก CSV ที่ยังไม่ปัก
+                  // (located=false, พิกัด placeholder) ไปตั้งพิกัดได้ในแท็บ Camera
                   markers: _cameras
+                      .where((camera) => camera.located)
                       .map(
                         (camera) => Marker(
                           point: camera.point,
@@ -252,6 +329,8 @@ class AdminCameraData {
   final LatLng point;
   final String rtspUrl;
   final List<Map<String, dynamic>> detectionZones;
+  // false = กล้องมาจาก CSV แต่ยังไม่ได้ปักหมุดจริง (พิกัดเป็น placeholder)
+  final bool located;
 
   const AdminCameraData({
     required this.id,
@@ -260,6 +339,7 @@ class AdminCameraData {
     required this.point,
     required this.rtspUrl,
     required this.detectionZones,
+    required this.located,
   });
 
   factory AdminCameraData.fromJson(Map<String, dynamic> json) {
@@ -275,6 +355,7 @@ class AdminCameraData {
       detectionZones: (json['detection_zones'] as List? ?? [])
           .map((z) => Map<String, dynamic>.from(z as Map))
           .toList(),
+      located: json['located'] as bool? ?? true,
     );
   }
 }
@@ -312,12 +393,13 @@ class _HintBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = error ??
+    final text =
+        error ??
         (loading
             ? 'Loading cameras…'
             : placing
-                ? 'Tap the map to place the camera'
-                : 'Tap "Add camera" then tap the map to mark a spot');
+            ? 'Tap the map to place the camera'
+            : 'Tap "Add camera" then tap the map to mark a spot');
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -334,7 +416,9 @@ class _HintBanner extends StatelessWidget {
             Icon(
               error != null ? Icons.error_outline : Icons.info_outline,
               size: 16,
-              color: error != null ? AppColors.error : AppColors.onSurfaceVariant,
+              color: error != null
+                  ? AppColors.error
+                  : AppColors.onSurfaceVariant,
             ),
             const SizedBox(width: 8),
             Flexible(
@@ -342,7 +426,9 @@ class _HintBanner extends StatelessWidget {
                 text,
                 style: TextStyle(
                   fontSize: 12,
-                  color: error != null ? AppColors.error : AppColors.onSurfaceVariant,
+                  color: error != null
+                      ? AppColors.error
+                      : AppColors.onSurfaceVariant,
                 ),
               ),
             ),

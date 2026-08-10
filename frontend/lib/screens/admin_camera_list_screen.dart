@@ -71,6 +71,11 @@ class _AdminCameraListScreenState extends State<AdminCameraListScreen> {
       final cameras = (res.data as List)
           .map((item) => AdminCameraData.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList();
+      // กล้องที่ยังไม่ปักหมุดขึ้นก่อน (จะได้เห็นตัวที่เพิ่งเพิ่มใน CSV/ACTIVE_CAMERAS ทันที)
+      cameras.sort((a, b) {
+        if (a.located != b.located) return a.located ? 1 : -1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
       if (!mounted) return;
       setState(() {
         _cameras = cameras;
@@ -201,11 +206,26 @@ class _AdminCameraListScreenState extends State<AdminCameraListScreen> {
               child: const Icon(Icons.videocam, color: AppColors.primary),
             ),
             title: Text(camera.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text(
-              camera.locationName.isNotEmpty
-                  ? camera.locationName
-                  : '${camera.point.latitude.toStringAsFixed(5)}, ${camera.point.longitude.toStringAsFixed(5)}',
-            ),
+            subtitle: camera.located
+                ? Text(
+                    camera.locationName.isNotEmpty
+                        ? camera.locationName
+                        : '${camera.point.latitude.toStringAsFixed(5)}, ${camera.point.longitude.toStringAsFixed(5)}',
+                  )
+                : Row(
+                    children: [
+                      Icon(Icons.location_off_outlined, size: 14, color: AppColors.error),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          camera.locationName.isNotEmpty
+                              ? '${camera.locationName} · ยังไม่ปักหมุด (แตะเพื่อตั้งพิกัด)'
+                              : 'ยังไม่ปักหมุด — แตะเพื่อตั้งพิกัด',
+                          style: const TextStyle(color: AppColors.error),
+                        ),
+                      ),
+                    ],
+                  ),
             trailing: IconButton(
               icon: const Icon(Icons.delete_outline, color: AppColors.error),
               tooltip: 'Delete',
