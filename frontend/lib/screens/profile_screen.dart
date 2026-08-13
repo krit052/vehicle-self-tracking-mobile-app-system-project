@@ -298,7 +298,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Computer Engineering • MFU',
+          '• MFU •',
           style: const TextStyle(
             fontSize: 13,
             color: AppColors.onSurfaceVariant,

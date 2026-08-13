@@ -1,55 +1,11 @@
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart' show UserSession;
 import '../widgets/notification_bell.dart';
 
 const _baseUrl = 'http://localhost:8001';
-
-const _imageSlotLabels = [
-  'Front View',
-  'Back View',
-  'Left Side',
-  'Right Side',
-  'License Plate',
-];
-
-const _imageSlotKeys = {
-  'Front View': 'front',
-  'Back View': 'back',
-  'Left Side': 'left',
-  'Right Side': 'right',
-  'License Plate': 'plate',
-};
-
-Future<Map<String, dynamic>> _uploadVehiclePhotos({
-  required String vehicleId,
-  required String token,
-  required Map<String, File?> images,
-}) async {
-  final formData = FormData.fromMap({
-    for (final entry in images.entries)
-      if (entry.value != null)
-        _imageSlotKeys[entry.key]!: await MultipartFile.fromFile(
-          entry.value!.path,
-          filename: entry.value!.path.split(Platform.pathSeparator).last,
-        ),
-  });
-  final res = await Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      headers: {'Authorization': 'Bearer $token'},
-      connectTimeout: const Duration(seconds: 20),
-      receiveTimeout: const Duration(seconds: 20),
-    ),
-  ).post('/vehicles/$vehicleId/photos', data: formData);
-  return res.data as Map<String, dynamic>;
-}
 
 class VehicleProfileScreen extends StatefulWidget {
   const VehicleProfileScreen({super.key});
@@ -392,37 +348,6 @@ class _VehicleCardState extends State<_VehicleCard> {
   bool _dirty = false;
   bool _saving = false;
 
-  final ImagePicker _picker = ImagePicker();
-
-  final Map<String, File?> _images = {
-    for (final label in _imageSlotLabels) label: null,
-  };
-  late final Map<String, String?> _imageUrls;
-
-  Future<void> _pickImage(String label) async {
-    try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
-
-      if (pickedFile != null) {
-        setState(() {
-          _images[label] = File(pickedFile.path);
-          _dirty = true;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to pick image: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -434,13 +359,6 @@ class _VehicleCardState extends State<_VehicleCard> {
     _geofenceCtrl = TextEditingController(
       text: (d['geofence_radius_m'] ?? 50).toString(),
     );
-    final images = (d['images'] as Map?)?.cast<String, dynamic>() ?? {};
-    _imageUrls = {
-      for (final entry in _imageSlotKeys.entries)
-        entry.key: (images[entry.value] as String?)?.isNotEmpty == true
-            ? images[entry.value] as String
-            : null,
-    };
 
     for (final c in [
       _modelCtrl,
@@ -497,49 +415,18 @@ class _VehicleCardState extends State<_VehicleCard> {
               'geofence_radius_m': int.tryParse(_geofenceCtrl.text) ?? 50,
             },
           );
-      var result = patchRes.data as Map<String, dynamic>;
-
-      String? photoError;
-      final hasPendingImages = _images.values.any((f) => f != null);
-      if (hasPendingImages) {
-        try {
-          result = await _uploadVehiclePhotos(
-            vehicleId: vehicleId,
-            token: token,
-            images: _images,
-          );
-        } on DioException catch (e) {
-          photoError =
-              e.response?.data?['detail']?.toString() ??
-              'Could not upload photos.';
-        }
-      }
+      final result = patchRes.data as Map<String, dynamic>;
 
       if (!mounted) return;
       setState(() {
         _saving = false;
         _dirty = false;
-        if (photoError == null) {
-          final images =
-              (result['images'] as Map?)?.cast<String, dynamic>() ?? {};
-          for (final entry in _imageSlotKeys.entries) {
-            final url = images[entry.value] as String?;
-            _imageUrls[entry.key] = (url?.isNotEmpty ?? false) ? url : null;
-            _images[entry.key] = null;
-          }
-        }
       });
       widget.onSaved(result);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            photoError == null
-                ? 'Profile saved'
-                : 'Profile saved, but photo upload failed: $photoError',
-          ),
-          backgroundColor: photoError == null
-              ? AppColors.green
-              : AppColors.error,
+        const SnackBar(
+          content: Text('Profile saved'),
+          backgroundColor: AppColors.green,
         ),
       );
     } on DioException catch (e) {
@@ -681,8 +568,6 @@ class _VehicleCardState extends State<_VehicleCard> {
                   children: [
                     const Divider(color: AppColors.outlineVariant, height: 1),
                     const SizedBox(height: 16),
-                    _buildImagesSection(),
-                    const SizedBox(height: 20),
                     _buildIdentificationSection(),
                     const SizedBox(height: 20),
                     _buildActionButtons(),
@@ -692,36 +577,6 @@ class _VehicleCardState extends State<_VehicleCard> {
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildImagesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _FieldHeader(
-          icon: Icons.photo_library_outlined,
-          title: 'Motorcycle Images',
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Upload clear photos of your vehicle from all angles for accurate CCTV identification.',
-          style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _imageSlotLabels.map((label) {
-            return _PhotoTile(
-              label: label,
-              imageFile: _images[label],
-              imageUrl: _imageUrls[label],
-              onTap: () => _pickImage(label),
-            );
-          }).toList(),
-        ),
-      ],
     );
   }
 
@@ -755,6 +610,13 @@ class _VehicleCardState extends State<_VehicleCard> {
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           textCapitalization: TextCapitalization.characters,
           textInputAction: TextInputAction.next,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _colorCtrl,
+          decoration: const InputDecoration(labelText: 'Color'),
+          textCapitalization: TextCapitalization.characters,
+          textInputAction: TextInputAction.done,
         ),
       ],
     );
@@ -974,14 +836,8 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
   final _plateCtrl = TextEditingController();
   final _provinceCtrl = TextEditingController();
   final _colorCtrl = TextEditingController();
-  final _geofenceCtrl = TextEditingController(text: '50');
   bool _saving = false;
   String? _error;
-
-  final ImagePicker _picker = ImagePicker();
-  final Map<String, File?> _images = {
-    for (final label in _imageSlotLabels) label: null,
-  };
 
   @override
   void dispose() {
@@ -989,25 +845,7 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
     _plateCtrl.dispose();
     _provinceCtrl.dispose();
     _colorCtrl.dispose();
-    _geofenceCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickImage(String label) async {
-    try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
-      if (pickedFile != null) {
-        setState(() => _images[label] = File(pickedFile.path));
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
-    }
   }
 
   Future<void> _submit() async {
@@ -1032,39 +870,13 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
               'license_plate': _plateCtrl.text.trim(),
               'province': _provinceCtrl.text.trim(),
               'color': _colorCtrl.text.trim(),
-              'geofence_radius_m': int.tryParse(_geofenceCtrl.text) ?? 50,
+              'geofence_radius_m': 5,
             },
           );
-      var vehicle = createRes.data as Map<String, dynamic>;
-      final vehicleId = vehicle['id'] as String;
-
-      String? photoError;
-      if (_images.values.any((f) => f != null)) {
-        try {
-          vehicle = await _uploadVehiclePhotos(
-            vehicleId: vehicleId,
-            token: widget.token,
-            images: _images,
-          );
-        } on DioException catch (e) {
-          photoError =
-              e.response?.data?['detail']?.toString() ??
-              'Could not upload photos.';
-        }
-      }
+      final vehicle = createRes.data as Map<String, dynamic>;
 
       widget.onCreated(vehicle);
       if (!mounted) return;
-      if (photoError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Vehicle added, but photo upload failed: $photoError',
-            ),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
       Navigator.of(context).pop();
     } on DioException catch (e) {
       setState(() {
@@ -1116,31 +928,6 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
                   Text(_error!, style: const TextStyle(color: AppColors.error)),
                   const SizedBox(height: 12),
                 ],
-                const _FieldHeader(
-                  icon: Icons.photo_library_outlined,
-                  title: 'Motorcycle Images',
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Upload clear photos of your vehicle from all angles for accurate CCTV identification.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _imageSlotLabels.map((label) {
-                    return _PhotoTile(
-                      label: label,
-                      imageFile: _images[label],
-                      onTap: () => _pickImage(label),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 20),
                 TextFormField(
                   controller: _modelCtrl,
                   decoration: const InputDecoration(labelText: 'Vehicle Model'),
@@ -1170,16 +957,8 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
                 TextFormField(
                   controller: _colorCtrl,
                   decoration: const InputDecoration(labelText: 'Color'),
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _geofenceCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Geofence Radius (m)',
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  textCapitalization: TextCapitalization.characters,
+                  textInputAction: TextInputAction.done,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -1300,80 +1079,6 @@ class _FieldHeader extends StatelessWidget {
             fontWeight: FontWeight.w600,
             color: AppColors.onSurface,
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PhotoTile extends StatelessWidget {
-  final String label;
-  final File? imageFile;
-  final String? imageUrl;
-  final VoidCallback onTap;
-
-  const _PhotoTile({
-    required this.label,
-    required this.imageFile,
-    this.imageUrl,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: (MediaQuery.of(context).size.width - 64) / 3,
-        height: 100,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.outlineVariant),
-        ),
-        child: imageFile != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(imageFile!, fit: BoxFit.cover),
-              )
-            : (imageUrl != null && imageUrl!.isNotEmpty)
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  imageUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _PhotoPlaceholder(label: label),
-                ),
-              )
-            : _PhotoPlaceholder(label: label),
-      ),
-    );
-  }
-}
-
-class _PhotoPlaceholder extends StatelessWidget {
-  final String label;
-
-  const _PhotoPlaceholder({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(
-          Icons.add_a_photo_outlined,
-          color: AppColors.onSurfaceVariant,
-          size: 22,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            color: AppColors.onSurfaceVariant,
-          ),
-          textAlign: TextAlign.center,
         ),
       ],
     );

@@ -963,6 +963,53 @@ def mark_read(notification_id: str, current_user: dict = Depends(get_current_use
     return {"ok": True}
 
 
+@app.delete("/notifications/{notification_id}")
+def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
+    """ลบการแจ้งเตือน 1 รายการ (ตรวจความเป็นเจ้าของแบบเดียวกับ mark_read)"""
+    alerts_col = db["notifications"]
+    try:
+        oid = ObjectId(notification_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid notification id")
+
+    doc = alerts_col.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    # ตรวจความเป็นเจ้าของ: doc ของ backend ใช้ user_id, doc ของ AI ใช้การแมตช์ป้าย
+    owned = doc.get("user_id") == current_user["sub"]
+    if not owned and "user_id" not in doc:
+        vehicle = vehicles_col.find_one({"user_id": current_user["sub"]})
+        owned = _ai_plate_matches(doc, vehicle)
+    if not owned:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    alerts_col.delete_one({"_id": oid})
+    return {"ok": True}
+
+
+@app.delete("/notifications")
+def delete_all_notifications(current_user: dict = Depends(get_current_user)):
+    """ลบการแจ้งเตือนทั้งหมดของ user คนนี้ (ทั้ง native และที่แมตช์ป้ายจาก AI)"""
+    alerts_col = db["notifications"]
+
+    # 1) การแจ้งเตือนที่ backend สร้างเอง
+    native = alerts_col.delete_many({"user_id": current_user["sub"]}).deleted_count
+
+    # 2) การแจ้งเตือนจาก AI ที่แมตช์ป้ายรถของ user (ไม่มี user_id)
+    ai_deleted = 0
+    vehicle = vehicles_col.find_one({"user_id": current_user["sub"]})
+    if vehicle:
+        ai_docs = alerts_col.find(
+            {"user_id": {"$exists": False}, "license_plate_text": {"$exists": True}},
+        )
+        stale_ids = [d["_id"] for d in ai_docs if _ai_plate_matches(d, vehicle)]
+        if stale_ids:
+            ai_deleted = alerts_col.delete_many({"_id": {"$in": stale_ids}}).deleted_count
+
+    return {"ok": True, "deleted": native + ai_deleted}
+
+
 @app.get("/internal/cameras")
 def internal_list_cameras(_: None = Depends(require_internal_secret)):
     """ai_worker เรียกดึงรายชื่อกล้องจาก DB (แหล่งข้อมูลเดียว) แทนการอ่าน CSV

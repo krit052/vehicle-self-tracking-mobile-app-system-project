@@ -4,7 +4,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
 import 'live_tracking_screen.dart';
 import 'login_screen.dart' show UserSession;
-import 'route_history_screen.dart';
 import 'vehicle_profile_screen.dart';
 import 'profile_screen.dart';
 
@@ -93,9 +92,6 @@ class _HomeScreenState extends State<HomeScreen> {
               licensePlate: vehicle['license_plate'] as String? ?? '—',
             )
           : noVehicleView,
-      vehicle != null
-          ? RouteHistoryScreen(vehicleId: vehicle['id'] as String)
-          : noVehicleView,
       const VehicleProfileScreen(),
       const ProfileScreen(),
     ];
@@ -115,11 +111,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map, color: AppColors.primary),
             label: 'Map',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history, color: AppColors.primary),
-            label: 'History',
           ),
           NavigationDestination(
             icon: Icon(Icons.motorcycle_sharp),
