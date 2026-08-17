@@ -345,6 +345,11 @@ class _VehicleCardState extends State<_VehicleCard> {
   late final TextEditingController _colorCtrl;
   late final TextEditingController _geofenceCtrl;
 
+  // แสดงคำเตือนภาษาเฉพาะตอนกำลังพิมพ์ในช่องนั้นๆ — เลิกโฟกัสแล้วไม่ต้องค้าง
+  final _modelFocus = FocusNode();
+  final _plateFocus = FocusNode();
+  final _provinceFocus = FocusNode();
+
   bool _dirty = false;
   bool _saving = false;
 
@@ -369,6 +374,9 @@ class _VehicleCardState extends State<_VehicleCard> {
     ]) {
       c.addListener(() => setState(() => _dirty = true));
     }
+    for (final f in [_modelFocus, _plateFocus, _provinceFocus]) {
+      f.addListener(() => setState(() {}));
+    }
   }
 
   @override
@@ -378,6 +386,9 @@ class _VehicleCardState extends State<_VehicleCard> {
     _provinceCtrl.dispose();
     _colorCtrl.dispose();
     _geofenceCtrl.dispose();
+    _modelFocus.dispose();
+    _plateFocus.dispose();
+    _provinceFocus.dispose();
     super.dispose();
   }
 
@@ -451,6 +462,9 @@ class _VehicleCardState extends State<_VehicleCard> {
     _provinceCtrl.text = d['province'] ?? '';
     _colorCtrl.text = d['color'] ?? '';
     _geofenceCtrl.text = (d['geofence_radius_m'] ?? 50).toString();
+    _modelFocus.unfocus();
+    _plateFocus.unfocus();
+    _provinceFocus.unfocus();
     setState(() => _dirty = false);
   }
 
@@ -591,14 +605,30 @@ class _VehicleCardState extends State<_VehicleCard> {
         const SizedBox(height: 12),
         TextFormField(
           controller: _modelCtrl,
-          decoration: const InputDecoration(labelText: 'Vehicle Model'),
+          focusNode: _modelFocus,
+          decoration: InputDecoration(
+            labelText: 'Vehicle Model',
+            helperText: _modelFocus.hasFocus
+                ? 'กรุณากรอกเป็นภาษาอังกฤษ'
+                : null,
+            helperStyle: const TextStyle(color: AppColors.secondary),
+            helperMaxLines: 2,
+          ),
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           textInputAction: TextInputAction.next,
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _plateCtrl,
-          decoration: const InputDecoration(labelText: 'License Plate'),
+          focusNode: _plateFocus,
+          decoration: InputDecoration(
+            labelText: 'License Plate',
+            helperText: _plateFocus.hasFocus
+                ? 'กรุณากรอกเป็นภาษาไทยเท่านั้น'
+                : null,
+            helperStyle: const TextStyle(color: AppColors.secondary),
+            helperMaxLines: 2,
+          ),
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           textCapitalization: TextCapitalization.characters,
           textInputAction: TextInputAction.next,
@@ -606,7 +636,15 @@ class _VehicleCardState extends State<_VehicleCard> {
         const SizedBox(height: 12),
         TextFormField(
           controller: _provinceCtrl,
-          decoration: const InputDecoration(labelText: 'Province'),
+          focusNode: _provinceFocus,
+          decoration: InputDecoration(
+            labelText: 'Province',
+            helperText: _provinceFocus.hasFocus
+                ? 'กรุณากรอกเป็นภาษาไทยเท่านั้น'
+                : null,
+            helperStyle: const TextStyle(color: AppColors.secondary),
+            helperMaxLines: 2,
+          ),
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           textCapitalization: TextCapitalization.characters,
           textInputAction: TextInputAction.next,
@@ -777,7 +815,7 @@ class _DetectionThresholdCardState extends State<_DetectionThresholdCard> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: _selectedDelay,
+                  initialValue: _selectedDelay,
                   decoration: const InputDecoration(
                     labelText: 'Delay Time',
                     prefixIcon: Icon(Icons.timer_outlined),
@@ -836,8 +874,19 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
   final _plateCtrl = TextEditingController();
   final _provinceCtrl = TextEditingController();
   final _colorCtrl = TextEditingController();
+  final _modelFocus = FocusNode();
+  final _plateFocus = FocusNode();
+  final _provinceFocus = FocusNode();
   bool _saving = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final f in [_modelFocus, _plateFocus, _provinceFocus]) {
+      f.addListener(() => setState(() {}));
+    }
+  }
 
   @override
   void dispose() {
@@ -845,6 +894,9 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
     _plateCtrl.dispose();
     _provinceCtrl.dispose();
     _colorCtrl.dispose();
+    _modelFocus.dispose();
+    _plateFocus.dispose();
+    _provinceFocus.dispose();
     super.dispose();
   }
 
@@ -930,7 +982,15 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
                 ],
                 TextFormField(
                   controller: _modelCtrl,
-                  decoration: const InputDecoration(labelText: 'Vehicle Model'),
+                  focusNode: _modelFocus,
+                  decoration: InputDecoration(
+                    labelText: 'Vehicle Model',
+                    helperText: _modelFocus.hasFocus
+                        ? 'กรุณากรอกเป็นภาษาอังกฤษ'
+                        : null,
+                    helperStyle: const TextStyle(color: AppColors.secondary),
+                    helperMaxLines: 2,
+                  ),
                   validator: (v) =>
                       (v == null || v.trim().isEmpty) ? 'Required' : null,
                   textInputAction: TextInputAction.next,
@@ -938,7 +998,15 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _plateCtrl,
-                  decoration: const InputDecoration(labelText: 'License Plate'),
+                  focusNode: _plateFocus,
+                  decoration: InputDecoration(
+                    labelText: 'License Plate',
+                    helperText: _plateFocus.hasFocus
+                        ? 'กรุณากรอกเป็นภาษาไทยเท่านั้น'
+                        : null,
+                    helperStyle: const TextStyle(color: AppColors.secondary),
+                    helperMaxLines: 2,
+                  ),
                   validator: (v) =>
                       (v == null || v.trim().isEmpty) ? 'Required' : null,
                   textCapitalization: TextCapitalization.characters,
@@ -947,7 +1015,15 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _provinceCtrl,
-                  decoration: const InputDecoration(labelText: 'Province'),
+                  focusNode: _provinceFocus,
+                  decoration: InputDecoration(
+                    labelText: 'Province',
+                    helperText: _provinceFocus.hasFocus
+                        ? 'กรุณากรอกเป็นภาษาไทยเท่านั้น'
+                        : null,
+                    helperStyle: const TextStyle(color: AppColors.secondary),
+                    helperMaxLines: 2,
+                  ),
                   validator: (v) =>
                       (v == null || v.trim().isEmpty) ? 'Required' : null,
                   textCapitalization: TextCapitalization.characters,

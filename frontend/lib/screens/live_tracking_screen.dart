@@ -49,11 +49,14 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   late String _licensePlate = widget.licensePlate;
   bool _vehicleInfoLoading = false;
 
+  // ซ่อนตำแหน่งกล้องบนแผนที่สำหรับ user ทั่วไป — admin เท่านั้นที่เห็นหมุดกล้อง
+  bool get _isAdmin => UserSession.instance.role == 'admin';
+
   @override
   void initState() {
     super.initState();
     _loadVehicleInfo();
-    _loadCameraMarkers();
+    if (_isAdmin) _loadCameraMarkers();
     // ดึงตำแหน่งรถ (last_detection) ซ้ำทุก 10 วิ ให้หมุดขยับตามที่กล้องเห็นล่าสุด
     _pollTimer = Timer.periodic(
       const Duration(seconds: 10),
@@ -339,7 +342,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             userAgentPackageName: 'com.mfu.vehicletracker',
           ),
-          if (_cameraMarkers.isNotEmpty)
+          if (_isAdmin && _cameraMarkers.isNotEmpty)
             MarkerLayer(
               markers: _cameraMarkers.map((camera) {
                 final selected = camera.id == _selectedCamera?.id;
