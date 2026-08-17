@@ -16,7 +16,6 @@ import hashlib
 import hmac
 import json
 import math
-import random
 # import smtplib
 import requests
 import secrets
@@ -28,7 +27,7 @@ from urllib.parse import unquote, urlparse
 from dotenv import load_dotenv
 # from email.mime.text import MIMEText
 # from email.mime.multipart import MIMEMultipart
-from fastapi import Body, FastAPI, Header, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -181,7 +180,6 @@ def _push_to_user(user_id: str, title: str, body: str, data: dict | None = None)
         users_col.update_one({"_id": ObjectId(user_id)},
                              {"$pull": {"device_tokens": {"$in": stale}}})
     return sent
-    raise
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 try:

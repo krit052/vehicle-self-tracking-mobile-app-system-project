@@ -26,6 +26,7 @@ class LoginScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   children: [
+                    const SizedBox(height: 50),
                     _Logo(),
                     const SizedBox(height: 32),
                     _TitleSection(),
@@ -151,51 +152,6 @@ class _LoginCardState extends State<_LoginCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryContainer,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'OAUTH AUTHENTICATION',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.05 * 12,
-                  color: AppColors.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed: () => _onOAuthLoginPressed(context),
-              icon: const Icon(Icons.mail_outline, size: 20),
-              label: const Text('Login via Lamduan Mail'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryContainer,
-                foregroundColor: AppColors.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                textStyle: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.05 * 14,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
           TextField(
             controller: _usernameController,
             decoration: InputDecoration(
@@ -361,19 +317,6 @@ class _LoginCardState extends State<_LoginCard> {
         ],
       ),
     );
-  }
-
-  void _onOAuthLoginPressed(BuildContext context) {
-    // replace with real OAuth flow against Lamduan Mail
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Redirecting to Lamduan Mail login...'),
-        backgroundColor: AppColors.primaryContainer,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-    Navigator.pushReplacementNamed(context, '/home');
   }
 
   Future<void> _onLoginPressed(BuildContext context) async {
