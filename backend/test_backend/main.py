@@ -116,6 +116,11 @@ CAMERA_PLACEHOLDER_LAT, CAMERA_PLACEHOLDER_LON = 20.0459, 99.8934
 DETECTION_PRESENCE_SECONDS = int(os.environ.get("DETECTION_PRESENCE_SECONDS", 900))
 # ทุกกี่วินาทีให้ background watcher เช็กว่ามีรถ locked ตัวไหน "หายไปจากกล้อง" แล้วบ้าง
 DEPARTURE_CHECK_SECONDS = int(os.environ.get("DEPARTURE_CHECK_SECONDS", 30))
+OWNER_AWAY_DISTANCE_M = float(os.environ.get("OWNER_AWAY_DISTANCE_M", 5.0))
+OWNER_NEAR_DISTANCE_M = float(os.environ.get("OWNER_NEAR_DISTANCE_M", 5.0))
+OWNER_ACCURACY_MAX_M = float(os.environ.get("OWNER_ACCURACY_MAX_M", 10.0))
+OWNER_STATUS_SAMPLE_COUNT = int(os.environ.get("OWNER_STATUS_SAMPLE_COUNT", 3))
+OWNER_STATUS_STALE_SECONDS = int(os.environ.get("OWNER_STATUS_STALE_SECONDS", 120))
 
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "brevo").strip().lower()
 BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
@@ -128,6 +133,7 @@ users_col = db["users"]
 vehicles_col = db["vehicles"]
 cameras_col = db["cameras"]
 otp_codes_col = db["otp_codes"]
+owner_locations_col = db["owner_locations"]
 
 try:
     client.admin.command("ping")
@@ -447,6 +453,29 @@ def _sync_cameras_from_csv() -> None:
         )
 
 
+def _utc_naive(dt):
+    if dt is None:
+        return None
+    if getattr(dt, "tzinfo", None) is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _owner_status_is_near(vehicle: dict) -> bool:
+    owner = vehicle.get("owner_tracking") or {}
+    if owner.get("status") != "NEAR":
+        return False
+
+    updated_at = _utc_naive(owner.get("updated_at"))
+    if updated_at is None:
+        return False
+
+    age = (
+        datetime.now(timezone.utc).replace(tzinfo=None) - updated_at
+    ).total_seconds()
+    return age <= OWNER_STATUS_STALE_SECONDS
+
+
 def _check_departed_locked_vehicles() -> None:
     """หา 'รถที่ล็อกอยู่แล้วหายไปจากกล้อง' → ยิงแจ้งเตือน UNAUTHORIZED_MOVE ('Is this you?')
     ครั้งเดียวต่อการหายไปหนึ่งครั้ง
@@ -466,6 +495,12 @@ def _check_departed_locked_vehicles() -> None:
             at = at.astimezone(timezone.utc).replace(tzinfo=None)
         # ยังเห็นอยู่ (ยังจอด) → ไม่ใช่การหาย
         if (now_naive - at).total_seconds() <= DETECTION_PRESENCE_SECONDS:
+            continue
+        if _owner_status_is_near(v):
+            vehicles_col.update_one(
+                {"_id": v["_id"]},
+                {"$set": {"last_detection.departed_alerted": True}},
+            )
             continue
         db["notifications"].insert_one({
             "user_id": v["user_id"],
@@ -1214,6 +1249,25 @@ class VehicleUpdate(BaseModel):
 IMAGE_SLOTS = ["front", "back", "left", "right", "plate"]
 
 
+def _owner_tracking_public(owner: dict | None) -> dict | None:
+    if not owner:
+        return None
+    distance = owner.get("distance_from_parking_m")
+    return {
+        "latitude": owner.get("latitude"),
+        "longitude": owner.get("longitude"),
+        "accuracy": owner.get("accuracy"),
+        "accuracy_accepted": owner.get("accuracy_accepted", False),
+        "parking_latitude": owner.get("parking_latitude"),
+        "parking_longitude": owner.get("parking_longitude"),
+        "status": owner.get("status", "UNKNOWN"),
+        "distance_from_parking_m": distance,
+        "distance_from_vehicle": distance,
+        "updated_at": _iso_z(owner.get("updated_at")),
+        "parked_at": _iso_z(owner.get("parked_at")),
+    }
+
+
 def _vehicle_to_dict(doc: dict) -> dict:
     images = doc.get("images", {})
     return {
@@ -1227,6 +1281,7 @@ def _vehicle_to_dict(doc: dict) -> dict:
         "locked": doc.get("locked", False),
         "images": {slot: images.get(slot, "") for slot in IMAGE_SLOTS},
         "last_detection": _last_detection_public(doc.get("last_detection")),
+        "owner_tracking": _owner_tracking_public(doc.get("owner_tracking")),
     }
 
 
@@ -1385,6 +1440,123 @@ class DetectionRequest(BaseModel):
 class LockRequest(BaseModel):
     vehicle_id: str
     locked: bool
+
+
+class OwnerLocationRequest(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy: float | None = None
+    set_parking_position: bool = False
+
+
+@app.put("/vehicles/{vehicle_id}/owner-location")
+def update_owner_location(
+    vehicle_id: str,
+    data: OwnerLocationRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    if not (-90 <= data.latitude <= 90) or not (-180 <= data.longitude <= 180):
+        raise HTTPException(status_code=400, detail="Invalid latitude or longitude")
+    if data.accuracy is not None and data.accuracy < 0:
+        raise HTTPException(status_code=400, detail="Invalid GPS accuracy")
+
+    try:
+        object_id = ObjectId(vehicle_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid vehicle id")
+
+    vehicle = vehicles_col.find_one(
+        {"_id": object_id, "user_id": current_user["sub"]}
+    )
+    if not vehicle:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
+    accuracy_accepted = (
+        data.accuracy is None or data.accuracy <= OWNER_ACCURACY_MAX_M
+    )
+    if data.set_parking_position and not accuracy_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail=f"GPS accuracy must be <= {OWNER_ACCURACY_MAX_M:g} m",
+        )
+
+    previous = vehicle.get("owner_tracking") or {}
+    parking_lat = previous.get("parking_latitude")
+    parking_lon = previous.get("parking_longitude")
+    parked_at = previous.get("parked_at")
+
+    now = datetime.now(timezone.utc)
+    if data.set_parking_position:
+        parking_lat = data.latitude
+        parking_lon = data.longitude
+        parked_at = now
+
+    distance_m = None
+    if parking_lat is not None and parking_lon is not None:
+        distance_m = _haversine_m(
+            float(parking_lat),
+            float(parking_lon),
+            data.latitude,
+            data.longitude,
+        )
+
+    status = previous.get("status", "UNKNOWN")
+    away_samples = int(previous.get("away_sample_count", 0) or 0)
+    near_samples = int(previous.get("near_sample_count", 0) or 0)
+
+    if data.set_parking_position:
+        status = "NEAR"
+        away_samples = 0
+        near_samples = OWNER_STATUS_SAMPLE_COUNT
+    elif distance_m is not None and accuracy_accepted:
+        if distance_m > OWNER_AWAY_DISTANCE_M:
+            away_samples += 1
+            near_samples = 0
+            if away_samples >= OWNER_STATUS_SAMPLE_COUNT:
+                status = "AWAY"
+        elif distance_m <= OWNER_NEAR_DISTANCE_M:
+            near_samples += 1
+            away_samples = 0
+            if near_samples >= OWNER_STATUS_SAMPLE_COUNT:
+                status = "NEAR"
+        else:
+            away_samples = 0
+            near_samples = 0
+
+    owner_tracking = {
+        "latitude": data.latitude,
+        "longitude": data.longitude,
+        "accuracy": data.accuracy,
+        "accuracy_accepted": accuracy_accepted,
+        "parking_latitude": parking_lat,
+        "parking_longitude": parking_lon,
+        "status": status,
+        "distance_from_parking_m": round(distance_m, 2)
+        if distance_m is not None else None,
+        "away_sample_count": away_samples,
+        "near_sample_count": near_samples,
+        "updated_at": now,
+        "parked_at": parked_at,
+    }
+
+    vehicles_col.update_one(
+        {"_id": object_id, "user_id": current_user["sub"]},
+        {"$set": {"owner_tracking": owner_tracking}},
+    )
+    owner_locations_col.insert_one({
+        "user_id": current_user["sub"],
+        "vehicle_id": vehicle_id,
+        "latitude": data.latitude,
+        "longitude": data.longitude,
+        "accuracy": data.accuracy,
+        "accuracy_accepted": accuracy_accepted,
+        "status": status,
+        "distance_from_parking_m": owner_tracking["distance_from_parking_m"],
+        "created_at": now,
+    })
+
+    updated = vehicles_col.find_one({"_id": object_id})
+    return _vehicle_to_dict(updated)
 
 
 @app.put("/vehicle/detection")
@@ -1619,6 +1791,14 @@ def report_vehicle_exit_event(
             "notified": False,
             "reason": "Vehicle is still within camera range",
             "distance_m": round(distance_m, 1),
+        }
+    if _owner_status_is_near(vehicle):
+        return {
+            "ok": True,
+            "notified": False,
+            "reason": "Owner is near vehicle",
+            "distance_m": round(distance_m, 1),
+            "owner_status": "NEAR",
         }
 
     alert_type = "UNAUTHORIZED_MOVE" if vehicle.get("locked", False) else "MOVED"

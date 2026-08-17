@@ -3,7 +3,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import '../services/owner_tracking_service.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
 
@@ -26,21 +28,31 @@ class LiveTrackingScreen extends StatefulWidget {
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   static const _mfuCenter = LatLng(20.0459, 99.8934);
   static const _baseUrl = 'http://localhost:8001';
+  static const _ownerUploadInterval = Duration(seconds: 5);
 
   final _mapController = MapController();
   final _sheetController = DraggableScrollableController();
   final _storage = const FlutterSecureStorage();
+  final _ownerTrackingService = OwnerTrackingService();
 
   // ตำแหน่งรถ = จุดที่กล้อง CCTV ตรวจจับป้ายได้ล่าสุด (ไม่ใช้ GPS มือถือแล้ว)
   LatLng? _currentPosition;
   List<_CameraMarkerData> _cameraMarkers = [];
   _CameraMarkerData? _selectedCamera;
-  DateTime? _lastUpdate;        // เวลาที่กล้องเห็นล่าสุด
-  String? _detectedCamera;      // ชื่อกล้องที่เห็นล่าสุด
+  DateTime? _lastUpdate; // เวลาที่กล้องเห็นล่าสุด
+  String? _detectedCamera; // ชื่อกล้องที่เห็นล่าสุด
   bool _locationLoading = true;
   String? _locationError;
   bool _followUser = true;
   Timer? _pollTimer;
+  StreamSubscription<Position>? _ownerLocationSub;
+  OwnerTrackingSnapshot _ownerTracking = OwnerTrackingSnapshot.fromJson(null);
+  LatLng? _liveOwnerPosition;
+  double? _liveOwnerAccuracy;
+  bool _ownerTrackingStarting = false;
+  bool _ownerLocationSaving = false;
+  DateTime? _lastOwnerUploadAt;
+  String? _ownerTrackingError;
 
   bool _locked = false;
   bool _locking = false;
@@ -54,11 +66,27 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     super.initState();
     _loadVehicleInfo();
     _loadCameraMarkers();
+    // แสดงหมุดตำแหน่งของ user ทันทีที่เปิดหน้า (ไม่ต้องกด Start GPS ก่อน)
+    // ช่วยให้ทดสอบ/ใช้งานง่ายขึ้นว่าเห็นตำแหน่งตัวเองบนแผนที่จริง
+    _initUserLocationPreview();
     // ดึงตำแหน่งรถ (last_detection) ซ้ำทุก 10 วิ ให้หมุดขยับตามที่กล้องเห็นล่าสุด
     _pollTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) => _loadVehicleInfo(),
     );
+  }
+
+  Future<void> _initUserLocationPreview() async {
+    try {
+      final position = await _ownerTrackingService.currentPosition();
+      // moveCamera: true — เลื่อนกล้องไปตำแหน่งจริงของ user ทันที เพราะตำแหน่งเริ่มต้น
+      // ของแผนที่ (MFU/กล้อง/รถ) มักอยู่คนละที่กับตำแหน่ง GPS จริงตอนทดสอบ
+      // ถ้าไม่เลื่อนกล้อง หมุดจะถูกวางไว้นอกจอและดูเหมือนไม่ขึ้นเลย
+      _setLiveOwnerPosition(position, moveCamera: true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _ownerTrackingError = _ownerTrackingErrorMessage(e));
+    }
   }
 
   Future<String?> _getToken() async {
@@ -68,6 +96,173 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     } catch (_) {
       return null;
     }
+  }
+
+  bool get _ownerTrackingActive => _ownerLocationSub != null;
+  LatLng? get _ownerMapPosition =>
+      _liveOwnerPosition ?? _ownerTracking.ownerPosition;
+  double? get _ownerMapAccuracy =>
+      _liveOwnerAccuracy ?? _ownerTracking.accuracy;
+
+  void _setLiveOwnerPosition(Position position, {bool moveCamera = false}) {
+    final point = LatLng(position.latitude, position.longitude);
+    if (!mounted) return;
+    setState(() {
+      _liveOwnerPosition = point;
+      _liveOwnerAccuracy = position.accuracy;
+    });
+    if (moveCamera) {
+      _mapController.move(point, 18);
+    }
+  }
+
+  Future<void> _setParkingPosition() async {
+    setState(() {
+      _ownerLocationSaving = true;
+      _ownerTrackingError = null;
+    });
+    try {
+      final position = await _ownerTrackingService.currentPosition();
+      _setLiveOwnerPosition(position, moveCamera: true);
+      final uploaded = await _uploadOwnerLocation(
+        position,
+        setParkingPosition: true,
+      );
+      if (uploaded) {
+        await _startOwnerTracking(initialPosition: position);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _ownerTrackingError = _ownerTrackingErrorMessage(e));
+    } finally {
+      if (mounted) {
+        setState(() => _ownerLocationSaving = false);
+      }
+    }
+  }
+
+  Future<void> _startOwnerTracking({Position? initialPosition}) async {
+    if (_ownerTrackingActive || _ownerTrackingStarting) return;
+    setState(() {
+      _ownerTrackingStarting = true;
+      _ownerTrackingError = null;
+    });
+
+    try {
+      final position =
+          initialPosition ?? await _ownerTrackingService.currentPosition();
+      _setLiveOwnerPosition(position, moveCamera: initialPosition == null);
+      await _uploadOwnerLocation(position, force: true);
+
+      final subscription = _ownerTrackingService.positionStream().listen(
+        _handleOwnerPosition,
+        onError: (error) {
+          if (!mounted) return;
+          setState(() {
+            _ownerTrackingError = _ownerTrackingErrorMessage(error);
+          });
+        },
+      );
+      if (!mounted) {
+        await subscription.cancel();
+        return;
+      }
+      setState(() => _ownerLocationSub = subscription);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _ownerTrackingError = _ownerTrackingErrorMessage(e));
+    } finally {
+      if (mounted) {
+        setState(() => _ownerTrackingStarting = false);
+      }
+    }
+  }
+
+  Future<void> _stopOwnerTracking() async {
+    final subscription = _ownerLocationSub;
+    if (subscription == null) return;
+    await subscription.cancel();
+    if (!mounted) return;
+    setState(() => _ownerLocationSub = null);
+  }
+
+  Future<void> _handleOwnerPosition(Position position) async {
+    _setLiveOwnerPosition(position);
+    final now = DateTime.now();
+    final lastUpload = _lastOwnerUploadAt;
+    if (lastUpload != null &&
+        now.difference(lastUpload) < _ownerUploadInterval) {
+      return;
+    }
+    _lastOwnerUploadAt = now;
+    await _uploadOwnerLocation(position, force: true);
+  }
+
+  Future<bool> _uploadOwnerLocation(
+    Position position, {
+    bool setParkingPosition = false,
+    bool force = false,
+  }) async {
+    final token = await _getToken();
+    if (token == null) {
+      if (mounted) {
+        setState(() => _ownerTrackingError = 'Not logged in.');
+      }
+      return false;
+    }
+
+    if (!force && !setParkingPosition) {
+      final lastUpload = _lastOwnerUploadAt;
+      if (lastUpload != null &&
+          DateTime.now().difference(lastUpload) < _ownerUploadInterval) {
+        return true;
+      }
+    }
+    _lastOwnerUploadAt = DateTime.now();
+
+    try {
+      final res =
+          await Dio(
+            BaseOptions(
+              baseUrl: _baseUrl,
+              headers: {'Authorization': 'Bearer $token'},
+              connectTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          ).put(
+            '/vehicles/${widget.vehicleId}/owner-location',
+            data: {
+              'latitude': position.latitude,
+              'longitude': position.longitude,
+              'accuracy': position.accuracy,
+              'set_parking_position': setParkingPosition,
+            },
+          );
+
+      final vehicle = Map<String, dynamic>.from(res.data as Map);
+      final owner = vehicle['owner_tracking'];
+      if (!mounted) return true;
+      setState(() {
+        _ownerTracking = OwnerTrackingSnapshot.fromJson(
+          owner is Map ? Map<String, dynamic>.from(owner) : null,
+        );
+        _ownerTrackingError = null;
+      });
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      setState(() => _ownerTrackingError = _ownerTrackingErrorMessage(e));
+      return false;
+    }
+  }
+
+  String _ownerTrackingErrorMessage(Object error) {
+    if (error is OwnerLocationException) return error.message;
+    if (error is DioException) {
+      return error.response?.data?['detail']?.toString() ??
+          'Could not update owner GPS.';
+    }
+    return 'Could not read owner GPS.';
   }
 
   Future<void> _loadCameraMarkers() async {
@@ -140,6 +335,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         }
         // ✅ sync locked from backend/mongo
         _locked = (vehicle['locked'] as bool?) ?? false;
+        final owner = vehicle['owner_tracking'];
+        _ownerTracking = OwnerTrackingSnapshot.fromJson(
+          owner is Map ? Map<String, dynamic>.from(owner) : null,
+        );
         // ตำแหน่งรถ = จุดที่กล้อง CCTV ตรวจจับป้ายได้ล่าสุด
         final ld = vehicle['last_detection'];
         final lat = (ld is Map) ? (ld['latitude'] as num?)?.toDouble() : null;
@@ -177,15 +376,36 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _ownerLocationSub?.cancel();
     _mapController.dispose();
     _sheetController.dispose();
     super.dispose();
   }
 
-  void _centerOnUser() {
-    final target = _currentPosition ?? _mfuCenter;
-    _mapController.move(target, 18);
-    setState(() => _followUser = true);
+  Future<void> _centerOnUser() async {
+    final ownerPoint = _ownerMapPosition;
+    if (ownerPoint != null) {
+      _mapController.move(ownerPoint, 18);
+      setState(() => _followUser = true);
+      return;
+    }
+
+    try {
+      final position = await _ownerTrackingService.currentPosition();
+      _setLiveOwnerPosition(position, moveCamera: true);
+      setState(() {
+        _followUser = true;
+        _ownerTrackingError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      final fallback = _currentPosition ?? _mfuCenter;
+      _mapController.move(fallback, 18);
+      setState(() {
+        _followUser = true;
+        _ownerTrackingError = _ownerTrackingErrorMessage(e);
+      });
+    }
   }
 
   Future<void> _toggleLock() async {
@@ -297,7 +517,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             FloatingActionButton.small(
               heroTag: "gps",
 
-              onPressed: _centerOnUser,
+              onPressed: () => _centerOnUser(),
 
               backgroundColor: _followUser
                   ? AppColors.primary
@@ -315,7 +535,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
   Widget _buildMap() {
     final marker = _currentPosition;
+    final ownerPoint = _ownerMapPosition;
+    final parkingPoint = _ownerTracking.parkingPosition;
     final initialCenter =
+        ownerPoint ??
         marker ??
         _selectedCamera?.point ??
         (_cameraMarkers.isNotEmpty ? _cameraMarkers.first.point : _mfuCenter);
@@ -371,6 +594,25 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                   height: 96,
                   child: const _VehiclePin(),
                 ),
+              ],
+            ),
+          if (parkingPoint != null || ownerPoint != null)
+            MarkerLayer(
+              markers: [
+                if (parkingPoint != null)
+                  Marker(
+                    point: parkingPoint,
+                    width: 38,
+                    height: 38,
+                    child: const _ParkingPin(),
+                  ),
+                if (ownerPoint != null)
+                  Marker(
+                    point: ownerPoint,
+                    width: 44,
+                    height: 44,
+                    child: _OwnerPin(status: _ownerTracking.status),
+                  ),
               ],
             ),
         ],
@@ -584,9 +826,142 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          const Divider(color: AppColors.outlineVariant, height: 1),
+          const SizedBox(height: 14),
+          _buildOwnerTrackingSection(),
         ],
       ),
     );
+  }
+
+  Widget _buildOwnerTrackingSection() {
+    final tracking = _ownerTracking;
+    final canStart = tracking.hasParkingPosition && !_ownerTrackingStarting;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.person_pin_circle_outlined,
+              size: 18,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Owner distance',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.onSurface,
+                ),
+              ),
+            ),
+            _OwnerStatusBadge(status: tracking.status),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _InfoTile(
+              icon: Icons.social_distance,
+              label: 'Distance',
+              value: _distanceLabel(tracking.distanceFromParkingM),
+            ),
+            _InfoTile(
+              icon: tracking.accuracyAccepted
+                  ? Icons.gps_fixed
+                  : Icons.gps_not_fixed,
+              label: 'Accuracy',
+              value: _accuracyLabel(_ownerMapAccuracy),
+            ),
+            _InfoTile(
+              icon: _ownerTrackingActive
+                  ? Icons.sensors
+                  : Icons.sensors_off_outlined,
+              label: 'GPS',
+              value: _ownerTrackingActive ? 'Tracking' : 'Paused',
+            ),
+          ],
+        ),
+        if (_ownerTrackingError != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _ownerTrackingError!,
+            style: const TextStyle(fontSize: 12, color: AppColors.error),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _ownerLocationSaving ? null : _setParkingPosition,
+                icon: _ownerLocationSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_location_alt_outlined, size: 18),
+                label: Text(
+                  tracking.hasParkingPosition ? 'Reset Parking' : 'Set Parking',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed:
+                    _ownerTrackingStarting ||
+                        (!_ownerTrackingActive && !canStart)
+                    ? null
+                    : () {
+                        if (_ownerTrackingActive) {
+                          _stopOwnerTracking();
+                        } else {
+                          _startOwnerTracking();
+                        }
+                      },
+                icon: _ownerTrackingStarting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _ownerTrackingActive
+                            ? Icons.pause_circle_outline
+                            : Icons.gps_fixed,
+                        size: 18,
+                      ),
+                label: Text(
+                  _ownerTrackingActive
+                      ? 'Stop GPS'
+                      : (_ownerTrackingStarting ? 'Starting...' : 'Start GPS'),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  String _distanceLabel(double? meters) {
+    if (meters == null) return '-';
+    final decimals = meters < 10 ? 1 : 0;
+    return '${meters.toStringAsFixed(decimals)} m';
+  }
+
+  String _accuracyLabel(double? meters) {
+    if (meters == null) return '-';
+    return '+/- ${meters.toStringAsFixed(1)} m';
   }
 
   Widget _buildLoadingOverlay() {
@@ -766,6 +1141,103 @@ class _VehiclePin extends StatelessWidget {
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+class _ParkingPin extends StatelessWidget {
+  const _ParkingPin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.primary, width: 2),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.16), blurRadius: 6),
+        ],
+      ),
+      child: const Icon(
+        Icons.local_parking,
+        size: 18,
+        color: AppColors.primary,
+      ),
+    );
+  }
+}
+
+class _OwnerPin extends StatelessWidget {
+  final String status;
+
+  const _OwnerPin({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      'NEAR' => AppColors.blue,
+      'AWAY' => AppColors.error,
+      _ => AppColors.blue,
+    };
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.surface, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 6,
+            ),
+          ],
+        ),
+        child: const Icon(Icons.person, size: 15, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _OwnerStatusBadge extends StatelessWidget {
+  final String status;
+
+  const _OwnerStatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, bg, fg) = switch (status) {
+      'NEAR' => ('Near', const Color(0xFFE3F2FD), AppColors.blue),
+      'AWAY' => ('Away', const Color(0xFFFFEBEE), AppColors.error),
+      _ => ('Unknown', const Color(0xFFF5F5F5), AppColors.onSurfaceVariant),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: fg,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
 
 class _StatusBadge extends StatelessWidget {
   final String status;
