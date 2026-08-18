@@ -1,4 +1,12 @@
 # New code cloud treading (Refactored & Stabilized)
+import sys
+
+# กัน UnicodeEncodeError ตอน print ตัวอักษรพิเศษ (→, — ฯลฯ) บน Windows console
+# ที่ default เป็น codepage ภาษาไทย (cp874) ซึ่ง encode ตัวอักษรพวกนี้ไม่ได้
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 import config as cfg
 import tracking.tracker as trk
 import utils as utl
@@ -610,10 +618,10 @@ def main():
 
     # WINDOW_KEEPRATIO = ต่อให้ลากขยายหน้าต่างเอง ภาพก็จะไม่ถูกยืดจนเพี้ยน
     # ขนาดจริงยังตั้งไม่ได้ตอนนี้ ต้องรอเห็นเฟรมแรกก่อน ถึงจะรู้สัดส่วนจริงของกล้อง (ดู _fit_window)
-    if ENABLE_DISPLAY:
-        for cam in contexts:
+    for cam in contexts:
+        if ENABLE_DISPLAY:
             cv2.namedWindow(cam.name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
-            cam.grabber.start()
+        cam.grabber.start()
     print(f"[Gateway] Display box: {DISPLAY_WIDTH}x{int(DISPLAY_WIDTH * 9 / 16)} "
           f"(ปรับด้วย DISPLAY_WIDTH ใน .env — ภาพจะย่อให้พอดีกรอบนี้ โดยคงสัดส่วนเดิม)")
 
