@@ -5,7 +5,7 @@ import '../theme/app_theme.dart';
 import 'login_screen.dart' show UserSession;
 import '../widgets/notification_bell.dart';
 
-const _baseUrl = 'http://localhost:8001';
+const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
 class VehicleProfileScreen extends StatefulWidget {
   const VehicleProfileScreen({super.key});

@@ -24,7 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final Dio dio = Dio(
     BaseOptions(
-      baseUrl: 'http://localhost:8001',
+      baseUrl: 'https://primp-squeeze-dedicator.ngrok-free.dev',
       connectTimeout: const Duration(seconds: 5),
       receiveTimeout: const Duration(seconds: 5),
     ),

@@ -9,7 +9,7 @@ import '../screens/notifications_screen.dart';
 class NotificationCenter {
   NotificationCenter._();
   static final NotificationCenter instance = NotificationCenter._();
-  static const _baseUrl = 'http://localhost:8001';
+  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
   final ValueNotifier<int> unread = ValueNotifier(0);
 

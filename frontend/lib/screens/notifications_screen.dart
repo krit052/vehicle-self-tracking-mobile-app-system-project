@@ -12,7 +12,7 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  static const _baseUrl = 'http://localhost:8001';
+  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
   List<_AlertItem> _alerts = [];
   bool _loading = true;
@@ -1085,6 +1085,8 @@ class _AlertCard extends StatelessWidget {
     'LOST' => AppColors.error,
     'UNAUTHORIZED_MOVE' => AppColors.error,
     'PLATE_DETECTED' => AppColors.blue,
+    'AUTO_LOCKED' => AppColors.green,
+    'AUTO_UNLOCKED' => const Color(0xFFE65100),
     _ => AppColors.onSurfaceVariant,
   };
 
@@ -1093,6 +1095,8 @@ class _AlertCard extends StatelessWidget {
     'LOST' => 'Vehicle Lost',
     'UNAUTHORIZED_MOVE' => 'Is This You?',
     'PLATE_DETECTED' => 'License Plate Detected',
+    'AUTO_LOCKED' => 'Vehicle Auto-Locked',
+    'AUTO_UNLOCKED' => 'Vehicle Auto-Unlocked',
     _ => 'Vehicle Alert',
   };
 
@@ -1103,6 +1107,8 @@ class _AlertCard extends StatelessWidget {
       'Your vehicle left its zone without being unlocked. Confirm this was you.',
     'PLATE_DETECTED' =>
       'Your vehicle was detected by a campus CCTV camera.',
+    'AUTO_LOCKED' => 'Locked automatically because you moved away from it.',
+    'AUTO_UNLOCKED' => 'Unlocked automatically because you came back near it.',
     _ => 'An alert was triggered for your vehicle.',
   };
 
@@ -1144,6 +1150,16 @@ class _AlertIcon extends StatelessWidget {
         Icons.pin_outlined,
         const Color(0xFFE3F2FD),
         AppColors.blue,
+      ),
+      'AUTO_LOCKED' => (
+        Icons.lock_outline,
+        const Color(0xFFE8F5E9),
+        AppColors.green,
+      ),
+      'AUTO_UNLOCKED' => (
+        Icons.lock_open_outlined,
+        const Color(0xFFFFF3E0),
+        const Color(0xFFE65100),
       ),
       _ => (
         Icons.notifications_outlined,

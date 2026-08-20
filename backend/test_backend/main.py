@@ -1498,7 +1498,8 @@ def update_owner_location(
             data.longitude,
         )
 
-    status = previous.get("status", "UNKNOWN")
+    previous_status = previous.get("status", "UNKNOWN")
+    status = previous_status
     away_samples = int(previous.get("away_sample_count", 0) or 0)
     near_samples = int(previous.get("near_sample_count", 0) or 0)
 
@@ -1537,10 +1538,55 @@ def update_owner_location(
         "parked_at": parked_at,
     }
 
+    # ล็อครถอัตโนมัติตามตำแหน่งเจ้าของ: NEAR (<= OWNER_NEAR_DISTANCE_M) → ปลดล็อค,
+    # AWAY (> OWNER_AWAY_DISTANCE_M) → ล็อค — ทำงานเฉพาะตอนสถานะเพิ่ง "ยืนยัน" เปลี่ยน
+    # (ผ่าน debounce ครบ OWNER_STATUS_SAMPLE_COUNT ครั้งแล้ว ไม่ใช่ทุก ping) และไม่ทำตอน
+    # set_parking_position (เพิ่งปักจุดจอด ยังไม่ใช่การเดินออกห่าง/กลับมา)
+    update_fields: dict = {"owner_tracking": owner_tracking}
+    lock_notification: dict | None = None
+    if not data.set_parking_position and status != previous_status and status in ("NEAR", "AWAY"):
+        new_locked = status == "AWAY"
+        if bool(vehicle.get("locked", False)) != new_locked:
+            update_fields["locked"] = new_locked
+            plate = vehicle.get("license_plate", "")
+            if new_locked:
+                alert_type, title, body = (
+                    "AUTO_LOCKED",
+                    "Vehicle Auto-Locked",
+                    f"{plate} locked automatically — you moved more than "
+                    f"{OWNER_AWAY_DISTANCE_M:g}m away.".strip(),
+                )
+            else:
+                alert_type, title, body = (
+                    "AUTO_UNLOCKED",
+                    "Vehicle Auto-Unlocked",
+                    f"{plate} unlocked automatically — you're back within "
+                    f"{OWNER_NEAR_DISTANCE_M:g}m.".strip(),
+                )
+            lock_notification = {"alert_type": alert_type, "title": title, "body": body}
+
     vehicles_col.update_one(
         {"_id": object_id, "user_id": current_user["sub"]},
-        {"$set": {"owner_tracking": owner_tracking}},
+        {"$set": update_fields},
     )
+    if lock_notification is not None:
+        db["notifications"].insert_one({
+            "user_id": current_user["sub"],
+            "alert_type": lock_notification["alert_type"],
+            "snapshot_url": "",
+            "license_plate": vehicle.get("license_plate", ""),
+            "camera_name": "",
+            "created_at": now,
+            "read": False,
+        })
+        _push_to_user(
+            current_user["sub"],
+            lock_notification["title"],
+            lock_notification["body"],
+            data={"alert_type": lock_notification["alert_type"],
+                  "vehicle_id": vehicle_id,
+                  "license_plate": vehicle.get("license_plate", "")},
+        )
     owner_locations_col.insert_one({
         "user_id": current_user["sub"],
         "vehicle_id": vehicle_id,

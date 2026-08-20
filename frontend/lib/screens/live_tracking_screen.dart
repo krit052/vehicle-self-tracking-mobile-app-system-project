@@ -27,7 +27,7 @@ class LiveTrackingScreen extends StatefulWidget {
 
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   static const _mfuCenter = LatLng(20.0459, 99.8934);
-  static const _baseUrl = 'http://localhost:8001';
+  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
   static const _ownerUploadInterval = Duration(seconds: 5);
 
   final _mapController = MapController();
@@ -250,6 +250,8 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           owner is Map ? Map<String, dynamic>.from(owner) : null,
         );
         _ownerTrackingError = null;
+        // ✅ sync locked ทันที เผื่อ backend auto lock/unlock ตามระยะห่างในรอบนี้
+        _locked = (vehicle['locked'] as bool?) ?? _locked;
       });
       return true;
     } catch (e) {

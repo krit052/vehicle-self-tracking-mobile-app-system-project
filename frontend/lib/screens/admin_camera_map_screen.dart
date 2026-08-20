@@ -25,7 +25,7 @@ class AdminCameraMapScreen extends StatefulWidget {
 
 class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
   static const _mfuCenter = LatLng(20.0459, 99.8934);
-  static const _baseUrl = 'http://localhost:8001';
+  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
   final _mapController = MapController();
   final _storage = const FlutterSecureStorage();

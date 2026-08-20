@@ -15,7 +15,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const _baseUrl = 'http://localhost:8001';
+  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
   final _storage = const FlutterSecureStorage();
 

@@ -111,9 +111,9 @@ class _LoginCardState extends State<_LoginCard> {
   bool _passwordVisible = false;
   bool _loading = false;
 
-  // adb reverse tcp:8001 tcp:8001 ทำให้ localhost ใช้ได้บน emulator/device ผ่าน USB
-  static const _backendUrls = ['http://localhost:8001'];
-  //static const _backendUrls = ['http://192.168.50.29:8001']; // If don't want to use adb reverse.
+  // ทดสอบบนมือถือจริงผ่าน 4G/5G หรือ WiFi ใดก็ได้ ผ่าน ngrok static domain (URL คงที่ ไม่เปลี่ยนเมื่อ restart)
+  static const _backendUrls = ['https://primp-squeeze-dedicator.ngrok-free.dev'];
+  //static const _backendUrls = ['http://localhost:8001']; // ใช้ตอนรันบน Windows desktop/emulator เดียวกับ backend
 
   final _storage = const FlutterSecureStorage();
 
