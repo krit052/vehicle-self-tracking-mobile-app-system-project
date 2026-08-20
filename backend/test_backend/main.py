@@ -115,6 +115,17 @@ CAMERA_PLACEHOLDER_LAT, CAMERA_PLACEHOLDER_LON = 20.0459, 99.8934
 DETECTION_PRESENCE_SECONDS = int(os.environ.get("DETECTION_PRESENCE_SECONDS", 900))
 # ทุกกี่วินาทีให้ background watcher เช็กว่ามีรถ locked ตัวไหน "หายไปจากกล้อง" แล้วบ้าง
 DEPARTURE_CHECK_SECONDS = int(os.environ.get("DEPARTURE_CHECK_SECONDS", 30))
+# กล้องไม่เห็นรถ locked นานเกินกี่วิ ถึงจะถือว่า "หาย" → หมุดรถบนแผนที่หายไปด้วย (ดู
+# _last_detection_public) และเริ่มยิง UNAUTHORIZED_MOVE (แยกจาก DETECTION_PRESENCE_SECONDS
+# เพราะตัวนั้นคุมเรื่องกันแจ้งซ้ำของ PLATE_DETECTED ต่างหาก ไม่อยากให้กระทบกันตอนปรับค่านี้
+# ไวๆ เพื่อเทส — ค่าเริ่มต้น 60 วิ = 1 นาที สำหรับเทสระบบ)
+VEHICLE_LOST_SECONDS = int(os.environ.get("VEHICLE_LOST_SECONDS", 60))
+# แจ้ง "รถหาย" ซ้ำได้สูงสุดกี่ครั้งต่อการหายไปหนึ่งรอบ และห่างกันครั้งละกี่วิ (ค่าเริ่มต้น
+# 3 ครั้ง ห่างครั้งละ 1 นาที สำหรับเทสระบบ) — รีเซ็ตนับใหม่เองเมื่อกล้องเห็นรถอีกครั้ง
+VEHICLE_LOST_ALERT_MAX = int(os.environ.get("VEHICLE_LOST_ALERT_MAX", 3))
+VEHICLE_LOST_ALERT_INTERVAL_SECONDS = int(
+    os.environ.get("VEHICLE_LOST_ALERT_INTERVAL_SECONDS", 60)
+)
 OWNER_AWAY_DISTANCE_M = float(os.environ.get("OWNER_AWAY_DISTANCE_M", 5.0))
 OWNER_NEAR_DISTANCE_M = float(os.environ.get("OWNER_NEAR_DISTANCE_M", 5.0))
 OWNER_ACCURACY_MAX_M = float(os.environ.get("OWNER_ACCURACY_MAX_M", 10.0))
@@ -475,31 +486,41 @@ def _owner_status_is_near(vehicle: dict) -> bool:
 
 
 def _check_departed_locked_vehicles() -> None:
-    """หา 'รถที่ล็อกอยู่แล้วหายไปจากกล้อง' → ยิงแจ้งเตือน UNAUTHORIZED_MOVE ('Is this you?')
-    ครั้งเดียวต่อการหายไปหนึ่งครั้ง
+    """หา 'รถที่ล็อกอยู่แล้วหายไปจากกล้อง' → ยิงแจ้งเตือน UNAUTHORIZED_MOVE ('Vehicle lost!!!')
+    ซ้ำได้สูงสุด VEHICLE_LOST_ALERT_MAX ครั้งต่อการหายไปหนึ่งครั้ง ห่างกันครั้งละอย่างน้อย
+    VEHICLE_LOST_ALERT_INTERVAL_SECONDS วิ
 
     เงื่อนไข: locked=True และเคยถูกกล้องเห็น (last_detection มี) แต่ไม่เห็นมานานเกิน
-    DETECTION_PRESENCE_SECONDS (= รถถูกเคลื่อนออกไปจากกล้อง) และยังไม่เคยเตือนการหายรอบนี้
-    (กันเตือนซ้ำด้วย flag last_detection.departed_alerted — จะรีเซ็ตเองเมื่อกล้องเห็นรถอีก
+    VEHICLE_LOST_SECONDS (= รถถูกเคลื่อนออกไปจากกล้อง) และยังแจ้งไม่ครบจำนวนครั้ง (นับด้วย
+    last_detection.lost_alert_count/lost_alert_last_at — รีเซ็ตเองเมื่อกล้องเห็นรถอีกครั้ง
     เพราะ /internal/plate-detected เขียน last_detection ก้อนใหม่ทับ)"""
     now = datetime.now(timezone.utc)
     now_naive = now.replace(tzinfo=None)
     for v in vehicles_col.find({"locked": True, "last_detection": {"$ne": None}}):
         ld = v.get("last_detection") or {}
         at = ld.get("at")
-        if at is None or ld.get("departed_alerted"):
+        if at is None:
             continue
         if getattr(at, "tzinfo", None) is not None:
             at = at.astimezone(timezone.utc).replace(tzinfo=None)
         # ยังเห็นอยู่ (ยังจอด) → ไม่ใช่การหาย
-        if (now_naive - at).total_seconds() <= DETECTION_PRESENCE_SECONDS:
+        if (now_naive - at).total_seconds() <= VEHICLE_LOST_SECONDS:
             continue
+
+        alert_count = int(ld.get("lost_alert_count", 0) or 0)
+        if alert_count >= VEHICLE_LOST_ALERT_MAX:
+            continue
+
+        last_alert_at = ld.get("lost_alert_last_at")
+        if last_alert_at is not None:
+            if getattr(last_alert_at, "tzinfo", None) is not None:
+                last_alert_at = last_alert_at.astimezone(timezone.utc).replace(tzinfo=None)
+            if (now_naive - last_alert_at).total_seconds() < VEHICLE_LOST_ALERT_INTERVAL_SECONDS:
+                continue
+
         if _owner_status_is_near(v):
-            vehicles_col.update_one(
-                {"_id": v["_id"]},
-                {"$set": {"last_detection.departed_alerted": True}},
-            )
             continue
+
         db["notifications"].insert_one({
             "user_id": v["user_id"],
             "alert_type": "UNAUTHORIZED_MOVE",
@@ -511,7 +532,7 @@ def _check_departed_locked_vehicles() -> None:
         })
         _push_to_user(
             v["user_id"],
-            "Is this you?",
+            "Vehicle lost!!!",
             (v.get("license_plate", "") +
              (f" left {ld.get('camera_name')}" if ld.get("camera_name") else " left the camera") +
              " while locked"),
@@ -519,13 +540,15 @@ def _check_departed_locked_vehicles() -> None:
                   "license_plate": v.get("license_plate", ""),
                   "camera_name": ld.get("camera_name", "")},
         )
-        # กันเตือนซ้ำการหายรอบนี้ (จะถูกล้างเมื่อกล้องเห็นรถอีกครั้ง)
         vehicles_col.update_one(
             {"_id": v["_id"]},
-            {"$set": {"last_detection.departed_alerted": True}},
+            {"$set": {
+                "last_detection.lost_alert_count": alert_count + 1,
+                "last_detection.lost_alert_last_at": now,
+            }},
         )
-        print(f"[departure-watcher] UNAUTHORIZED_MOVE → {v.get('license_plate','')} "
-              f"left {ld.get('camera_name','')}")
+        print(f"[departure-watcher] UNAUTHORIZED_MOVE ({alert_count + 1}/{VEHICLE_LOST_ALERT_MAX}) "
+              f"→ {v.get('license_plate','')} left {ld.get('camera_name','')}")
 
 
 def _departure_watcher_loop() -> None:
@@ -541,7 +564,7 @@ def _departure_watcher_loop() -> None:
 threading.Thread(target=_departure_watcher_loop, daemon=True,
                  name="departure-watcher").start()
 print(f"✅ Departure watcher started (every {DEPARTURE_CHECK_SECONDS}s, "
-      f"presence window {DETECTION_PRESENCE_SECONDS}s)")
+      f"lost window {VEHICLE_LOST_SECONDS}s)")
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -1234,7 +1257,7 @@ class VehicleCreate(BaseModel):
     license_plate: str
     province: str
     color: str | None = None
-    geofence_radius_m: int = 50
+    geofence_radius_m: int = 10
 
 class VehicleUpdate(BaseModel):
     model: str | None = None
@@ -1275,7 +1298,7 @@ def _vehicle_to_dict(doc: dict) -> dict:
         "province": doc.get("province", ""),
         "color": doc.get("color", ""),
         "detection": doc.get("detection",1),
-        "geofence_radius_m": doc.get("geofence_radius_m", 50),
+        "geofence_radius_m": doc.get("geofence_radius_m", 10),
         "locked": doc.get("locked", False),
         "images": {slot: images.get(slot, "") for slot in IMAGE_SLOTS},
         "last_detection": _last_detection_public(doc.get("last_detection")),
@@ -1291,11 +1314,12 @@ def _last_detection_public(ld: dict | None) -> dict | None:
     at = ld.get("at")
     if at is not None and getattr(at, "tzinfo", None) is not None:
         at = at.astimezone(timezone.utc).replace(tzinfo=None)
-    # หมุดหายเมื่อรถออก: ถ้ากล้องไม่เห็นเกิน DETECTION_PRESENCE_SECONDS ถือว่ารถไม่อยู่แล้ว
+    # หมุดหายเมื่อรถออก: ถ้ากล้องไม่เห็นเกิน VEHICLE_LOST_SECONDS ถือว่ารถไม่อยู่แล้ว (ใช้ตัว
+    # เดียวกับที่ departure watcher ใช้ตัดสิน "รถหาย" → หมุดกับแจ้งเตือนหายพร้อมกัน)
     # → คืน None เพื่อให้ frontend ไม่ปักหมุด (จนกว่าจะกลับมาเห็นใหม่)
     if at is not None:
         age = (datetime.now(timezone.utc).replace(tzinfo=None) - at).total_seconds()
-        if age > DETECTION_PRESENCE_SECONDS:
+        if age > VEHICLE_LOST_SECONDS:
             return None
     return {
         "camera_name": ld.get("camera_name", ""),
@@ -1444,7 +1468,6 @@ class OwnerLocationRequest(BaseModel):
     latitude: float
     longitude: float
     accuracy: float | None = None
-    set_parking_position: bool = False
 
 
 @app.put("/vehicles/{vehicle_id}/owner-location")
@@ -1472,42 +1495,32 @@ def update_owner_location(
     accuracy_accepted = (
         data.accuracy is None or data.accuracy <= OWNER_ACCURACY_MAX_M
     )
-    if data.set_parking_position and not accuracy_accepted:
-        raise HTTPException(
-            status_code=400,
-            detail=f"GPS accuracy must be <= {OWNER_ACCURACY_MAX_M:g} m",
-        )
-
-    previous = vehicle.get("owner_tracking") or {}
-    parking_lat = previous.get("parking_latitude")
-    parking_lon = previous.get("parking_longitude")
-    parked_at = previous.get("parked_at")
 
     now = datetime.now(timezone.utc)
-    if data.set_parking_position:
-        parking_lat = data.latitude
-        parking_lon = data.longitude
-        parked_at = now
+
+    # ตำแหน่งรถ = จุดที่กล้อง CCTV เห็นป้ายทะเบียนล่าสุด (last_detection, เขียนโดย
+    # /internal/plate-detected) ใช้ตัวนี้เป็นจุดอ้างอิงเทียบระยะห่างโดยตรง ไม่ต้องรอให้
+    # เจ้าของเคยเดินไปอยู่ใกล้รถมาก่อนเหมือนเดิม (ไม่มีจุดจอดถ้ากล้องยังไม่เคยเห็นรถคันนี้เลย)
+    last_detection = vehicle.get("last_detection") or {}
+    vehicle_lat = last_detection.get("latitude")
+    vehicle_lon = last_detection.get("longitude")
 
     distance_m = None
-    if parking_lat is not None and parking_lon is not None:
+    if vehicle_lat is not None and vehicle_lon is not None:
         distance_m = _haversine_m(
-            float(parking_lat),
-            float(parking_lon),
+            float(vehicle_lat),
+            float(vehicle_lon),
             data.latitude,
             data.longitude,
         )
 
+    previous = vehicle.get("owner_tracking") or {}
     previous_status = previous.get("status", "UNKNOWN")
     status = previous_status
     away_samples = int(previous.get("away_sample_count", 0) or 0)
     near_samples = int(previous.get("near_sample_count", 0) or 0)
 
-    if data.set_parking_position:
-        status = "NEAR"
-        away_samples = 0
-        near_samples = OWNER_STATUS_SAMPLE_COUNT
-    elif distance_m is not None and accuracy_accepted:
+    if distance_m is not None and accuracy_accepted:
         if distance_m > OWNER_AWAY_DISTANCE_M:
             away_samples += 1
             near_samples = 0
@@ -1527,24 +1540,23 @@ def update_owner_location(
         "longitude": data.longitude,
         "accuracy": data.accuracy,
         "accuracy_accepted": accuracy_accepted,
-        "parking_latitude": parking_lat,
-        "parking_longitude": parking_lon,
+        "parking_latitude": vehicle_lat,
+        "parking_longitude": vehicle_lon,
         "status": status,
         "distance_from_parking_m": round(distance_m, 2)
         if distance_m is not None else None,
         "away_sample_count": away_samples,
         "near_sample_count": near_samples,
         "updated_at": now,
-        "parked_at": parked_at,
+        "parked_at": last_detection.get("at"),
     }
 
     # ล็อครถอัตโนมัติตามตำแหน่งเจ้าของ: NEAR (<= OWNER_NEAR_DISTANCE_M) → ปลดล็อค,
     # AWAY (> OWNER_AWAY_DISTANCE_M) → ล็อค — ทำงานเฉพาะตอนสถานะเพิ่ง "ยืนยัน" เปลี่ยน
-    # (ผ่าน debounce ครบ OWNER_STATUS_SAMPLE_COUNT ครั้งแล้ว ไม่ใช่ทุก ping) และไม่ทำตอน
-    # set_parking_position (เพิ่งปักจุดจอด ยังไม่ใช่การเดินออกห่าง/กลับมา)
+    # (ผ่าน debounce ครบ OWNER_STATUS_SAMPLE_COUNT ครั้งแล้ว ไม่ใช่ทุก ping)
     update_fields: dict = {"owner_tracking": owner_tracking}
     lock_notification: dict | None = None
-    if not data.set_parking_position and status != previous_status and status in ("NEAR", "AWAY"):
+    if status != previous_status and status in ("NEAR", "AWAY"):
         new_locked = status == "AWAY"
         if bool(vehicle.get("locked", False)) != new_locked:
             update_fields["locked"] = new_locked
@@ -1752,7 +1764,7 @@ def report_plate_detected(
         should_notify = not already_notified
 
         # อัปเดตตำแหน่ง + at + flag notified "เสมอ" → หมุดค้าง/ขยับตามกล้องที่เห็นล่าสุด
-        # และจำได้ว่าแจ้งไปแล้วในรอบนี้ (เขียนก้อนใหม่ทับ → departed_alerted ของ watcher หายเอง)
+        # และจำได้ว่าแจ้งไปแล้วในรอบนี้ (เขียนก้อนใหม่ทับ → lost_alert_count ของ watcher หายเอง)
         vehicles_col.update_one(
             {"_id": vehicle["_id"]},
             {"$set": {"last_detection": {
@@ -1828,7 +1840,7 @@ def report_vehicle_exit_event(
     distance_m = _haversine_m(
         event.latitude, event.longitude, camera["latitude"], camera["longitude"]
     )
-    radius_m = vehicle.get("geofence_radius_m", 50)
+    radius_m = vehicle.get("geofence_radius_m", 10)
     if distance_m <= radius_m:
         return {
             "ok": True,

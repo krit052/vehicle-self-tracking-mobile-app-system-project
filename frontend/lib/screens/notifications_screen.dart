@@ -1093,7 +1093,7 @@ class _AlertCard extends StatelessWidget {
   String _typeTitle(String type) => switch (type) {
     'MOVED' => 'Vehicle Moved',
     'LOST' => 'Vehicle Lost',
-    'UNAUTHORIZED_MOVE' => 'Is This You?',
+    'UNAUTHORIZED_MOVE' => 'Vehicle lost!!!',
     'PLATE_DETECTED' => 'License Plate Detected',
     'AUTO_LOCKED' => 'Vehicle Auto-Locked',
     'AUTO_UNLOCKED' => 'Vehicle Auto-Unlocked',

@@ -50,7 +50,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   LatLng? _liveOwnerPosition;
   double? _liveOwnerAccuracy;
   bool _ownerTrackingStarting = false;
-  bool _ownerLocationSaving = false;
   DateTime? _lastOwnerUploadAt;
   String? _ownerTrackingError;
 
@@ -69,27 +68,14 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     super.initState();
     _loadVehicleInfo();
     if (_isAdmin) _loadCameraMarkers();
-    // แสดงหมุดตำแหน่งของ user ทันทีที่เปิดหน้า (ไม่ต้องกด Start GPS ก่อน)
-    // ช่วยให้ทดสอบ/ใช้งานง่ายขึ้นว่าเห็นตำแหน่งตัวเองบนแผนที่จริง
-    _initUserLocationPreview();
+    // เริ่ม track ตำแหน่งเจ้าของอัตโนมัติทันทีที่เปิดหน้า ไม่ต้องกดปุ่มเอง — backend จะ
+    // ตั้งจุดจอดจาก ping แรกเองและขยับตามตอนอยู่ใกล้รถ (ดู update_owner_location)
+    _startOwnerTracking();
     // ดึงตำแหน่งรถ (last_detection) ซ้ำทุก 10 วิ ให้หมุดขยับตามที่กล้องเห็นล่าสุด
     _pollTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) => _loadVehicleInfo(),
     );
-  }
-
-  Future<void> _initUserLocationPreview() async {
-    try {
-      final position = await _ownerTrackingService.currentPosition();
-      // moveCamera: true — เลื่อนกล้องไปตำแหน่งจริงของ user ทันที เพราะตำแหน่งเริ่มต้น
-      // ของแผนที่ (MFU/กล้อง/รถ) มักอยู่คนละที่กับตำแหน่ง GPS จริงตอนทดสอบ
-      // ถ้าไม่เลื่อนกล้อง หมุดจะถูกวางไว้นอกจอและดูเหมือนไม่ขึ้นเลย
-      _setLiveOwnerPosition(position, moveCamera: true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _ownerTrackingError = _ownerTrackingErrorMessage(e));
-    }
   }
 
   Future<String?> _getToken() async {
@@ -116,31 +102,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     });
     if (moveCamera) {
       _mapController.move(point, 18);
-    }
-  }
-
-  Future<void> _setParkingPosition() async {
-    setState(() {
-      _ownerLocationSaving = true;
-      _ownerTrackingError = null;
-    });
-    try {
-      final position = await _ownerTrackingService.currentPosition();
-      _setLiveOwnerPosition(position, moveCamera: true);
-      final uploaded = await _uploadOwnerLocation(
-        position,
-        setParkingPosition: true,
-      );
-      if (uploaded) {
-        await _startOwnerTracking(initialPosition: position);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _ownerTrackingError = _ownerTrackingErrorMessage(e));
-    } finally {
-      if (mounted) {
-        setState(() => _ownerLocationSaving = false);
-      }
     }
   }
 
@@ -181,14 +142,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     }
   }
 
-  Future<void> _stopOwnerTracking() async {
-    final subscription = _ownerLocationSub;
-    if (subscription == null) return;
-    await subscription.cancel();
-    if (!mounted) return;
-    setState(() => _ownerLocationSub = null);
-  }
-
   Future<void> _handleOwnerPosition(Position position) async {
     _setLiveOwnerPosition(position);
     final now = DateTime.now();
@@ -203,7 +156,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
   Future<bool> _uploadOwnerLocation(
     Position position, {
-    bool setParkingPosition = false,
     bool force = false,
   }) async {
     final token = await _getToken();
@@ -214,7 +166,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       return false;
     }
 
-    if (!force && !setParkingPosition) {
+    if (!force) {
       final lastUpload = _lastOwnerUploadAt;
       if (lastUpload != null &&
           DateTime.now().difference(lastUpload) < _ownerUploadInterval) {
@@ -238,7 +190,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
               'latitude': position.latitude,
               'longitude': position.longitude,
               'accuracy': position.accuracy,
-              'set_parking_position': setParkingPosition,
             },
           );
 
@@ -541,7 +492,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   Widget _buildMap() {
     final marker = _currentPosition;
     final ownerPoint = _ownerMapPosition;
-    final parkingPoint = _ownerTracking.parkingPosition;
     final initialCenter =
         ownerPoint ??
         marker ??
@@ -601,23 +551,15 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                 ),
               ],
             ),
-          if (parkingPoint != null || ownerPoint != null)
+          if (ownerPoint != null)
             MarkerLayer(
               markers: [
-                if (parkingPoint != null)
-                  Marker(
-                    point: parkingPoint,
-                    width: 38,
-                    height: 38,
-                    child: const _ParkingPin(),
-                  ),
-                if (ownerPoint != null)
-                  Marker(
-                    point: ownerPoint,
-                    width: 44,
-                    height: 44,
-                    child: _OwnerPin(status: _ownerTracking.status),
-                  ),
+                Marker(
+                  point: ownerPoint,
+                  width: 44,
+                  height: 44,
+                  child: _OwnerPin(status: _ownerTracking.status),
+                ),
               ],
             ),
         ],
@@ -842,7 +784,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
   Widget _buildOwnerTrackingSection() {
     final tracking = _ownerTracking;
-    final canStart = tracking.hasParkingPosition && !_ownerTrackingStarting;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -899,61 +840,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
             style: const TextStyle(fontSize: 12, color: AppColors.error),
           ),
         ],
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _ownerLocationSaving ? null : _setParkingPosition,
-                icon: _ownerLocationSaving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_location_alt_outlined, size: 18),
-                label: Text(
-                  tracking.hasParkingPosition ? 'Reset Parking' : 'Set Parking',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed:
-                    _ownerTrackingStarting ||
-                        (!_ownerTrackingActive && !canStart)
-                    ? null
-                    : () {
-                        if (_ownerTrackingActive) {
-                          _stopOwnerTracking();
-                        } else {
-                          _startOwnerTracking();
-                        }
-                      },
-                icon: _ownerTrackingStarting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        _ownerTrackingActive
-                            ? Icons.pause_circle_outline
-                            : Icons.gps_fixed,
-                        size: 18,
-                      ),
-                label: Text(
-                  _ownerTrackingActive
-                      ? 'Stop GPS'
-                      : (_ownerTrackingStarting ? 'Starting...' : 'Start GPS'),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -1146,31 +1032,6 @@ class _VehiclePin extends StatelessWidget {
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
-
-class _ParkingPin extends StatelessWidget {
-  const _ParkingPin();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.primary, width: 2),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.16), blurRadius: 6),
-        ],
-      ),
-      child: const Icon(
-        Icons.local_parking,
-        size: 18,
-        color: AppColors.primary,
-      ),
-    );
-  }
-}
 
 class _OwnerPin extends StatelessWidget {
   final String status;
