@@ -52,7 +52,7 @@ ACTIVE_CAMERAS = cfg.ACTIVE_CAMERAS
 # ใช้เฉพาะตอนทดสอบไฟล์วิดีโอ (จะถูกใช้ก็ต่อเมื่อ ACTIVE_CAMERAS ว่าง)
 RTSP_URL = cfg.RTSP_URL
 
-# backend สำหรับแจ้ง "ตรวจเจอป้าย" (ต้องชี้ไปพอร์ตเดียวกับที่รัน test_backend = 8001)
+# backend สำหรับแจ้ง "ตรวจเจอป้าย" (ต้องชี้ไปพอร์ตเดียวกับที่รัน backend/api = 8001)
 BACKEND_URL = os.environ.get("BACKEND_URL", "").rstrip("/")
 INTERNAL_SECRET = os.environ.get("INTERNAL_SECRET", "").strip()
 
