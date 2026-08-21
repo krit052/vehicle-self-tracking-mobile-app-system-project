@@ -102,6 +102,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  Future<void> _markAllRead() async {
+    final unreadIds = _alerts.where((a) => !a.read).map((a) => a.id).toList();
+    if (unreadIds.isEmpty) return;
+    for (final id in unreadIds) {
+      try {
+        await _dio.patch('/notifications/$id/read');
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _alerts = _alerts.map((a) => a.read ? a : a.copyWithRead(true)).toList();
+    });
+    _syncUnreadBadge();
+  }
+
   // ── Delete ──────────────────────────────────────────────────────────────────
 
   void _enterSelection(String id) {
@@ -353,6 +368,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       actions: [
         if (_alerts.isNotEmpty) ...[
+          if (_alerts.any((a) => !a.read))
+            TextButton(
+              onPressed: _markAllRead,
+              style: TextButton.styleFrom(foregroundColor: AppColors.onPrimary),
+              child: const Text(
+                'Read all',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.checklist),
             tooltip: 'Select',

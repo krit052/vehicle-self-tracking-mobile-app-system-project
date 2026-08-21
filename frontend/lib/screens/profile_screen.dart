@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../providers/firebase_messaging.dart' show unregisterFcmToken;
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
 import 'login_screen.dart' show UserSession;
@@ -151,6 +152,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+
+    final token = await _getToken();
+    if (token != null) {
+      await unregisterFcmToken(_baseUrl, token);
+    }
 
     try {
       await _storage.delete(key: 'jwt_token');

@@ -5,6 +5,7 @@ import 'screens/register_screen.dart';
 import 'screens/forgot_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_home_screen.dart';
+import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -21,8 +22,9 @@ class MfuTrackerApp extends StatelessWidget {
       title: 'MFU Vehicle Tracker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
-      initialRoute: '/login',
+      initialRoute: '/',
       routes: {
+        '/': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/forgotpassword': (context) => const ForgotScreen(),

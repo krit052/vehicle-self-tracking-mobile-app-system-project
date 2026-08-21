@@ -35,6 +35,32 @@ Future<void> registerFcmToken(String baseUrl, String jwt) async {
   }
 }
 
+/// เรียกก่อน logout: ถอด FCM token ของเครื่องนี้ออกจากบัญชีที่กำลังจะออกจากระบบ
+/// ไม่งั้นเครื่องนี้จะยังได้ push ของบัญชีเดิมต่อแม้ logout ไปแล้ว (ถ้ามีคนอื่น login
+/// เครื่องเดียวกันต่อ ทั้งสองบัญชีจะมี token เดียวกันผูกอยู่พร้อมกัน)
+/// ห่อ try/catch ทั้งหมด — ถอด token ไม่สำเร็จก็ต้อง logout ต่อได้ปกติ
+Future<void> unregisterFcmToken(String baseUrl, String jwt) async {
+  try {
+    await Firebase.initializeApp();
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null || token.isEmpty) return;
+    await Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ),
+    ).delete(
+      '/me/device-token',
+      data: {'token': token},
+      options: Options(headers: {'Authorization': 'Bearer $jwt'}),
+    );
+    debugPrint('FCM token unregistered from backend');
+  } catch (e) {
+    debugPrint('FCM unregister failed: $e');
+  }
+}
+
 class FirebaseMessagingProvider extends ChangeNotifier {
   final _messaging = FirebaseMessaging.instance;
 

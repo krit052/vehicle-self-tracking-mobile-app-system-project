@@ -181,6 +181,23 @@ def _push_to_user(user_id: str, title: str, body: str, data: dict | None = None)
                 token=tok,
                 notification=messaging.Notification(title=title, body=body),
                 data={k: str(v) for k, v in (data or {}).items()},
+                # priority='high' + channel_id ผูกกับ channel ที่สร้างไว้ฝั่ง Android
+                # (ดู MainActivity.kt) → OS ถึงจะโชว์ heads-up popup + สั่น แทนที่จะ
+                # เงียบๆ ใน tray เฉยๆ (ถ้าไม่ตั้ง priority จะได้ importance ต่ำสุดโดย default)
+                android=messaging.AndroidConfig(
+                    priority='high',
+                    notification=messaging.AndroidNotification(
+                        channel_id='high_importance_channel',
+                        priority='high',
+                        default_vibrate_timings=True,
+                        sound='default',
+                    ),
+                ),
+                apns=messaging.APNSConfig(
+                    payload=messaging.APNSPayload(
+                        aps=messaging.Aps(sound='default', content_available=True),
+                    ),
+                ),
             ))
             sent += 1
         except messaging.UnregisteredError:
