@@ -1569,11 +1569,15 @@ def update_owner_location(
     }
 
     # ล็อครถอัตโนมัติตามตำแหน่งเจ้าของ: NEAR (<= OWNER_NEAR_DISTANCE_M) → ปลดล็อค,
-    # AWAY (> OWNER_AWAY_DISTANCE_M) → ล็อค — ทำงานเฉพาะตอนสถานะเพิ่ง "ยืนยัน" เปลี่ยน
-    # (ผ่าน debounce ครบ OWNER_STATUS_SAMPLE_COUNT ครั้งแล้ว ไม่ใช่ทุก ping)
+    # AWAY (> OWNER_AWAY_DISTANCE_M) → ล็อค — เช็คทุกครั้งที่สถานะ "ยืนยัน" แล้วว่า locked
+    # ตรงกับที่ควรเป็นไหม (ไม่ใช่แค่ตอนเพิ่งเปลี่ยนจาก NEAR<->AWAY) เพื่อให้กรณีเปิดแอปมา
+    # แล้วเจ้าของอยู่ไกลอยู่แล้วตั้งแต่ต้น (ไม่ได้เพิ่งเดินออกมา) หรือมีคนไปกดล็อค/ปลดล็อคเอง
+    # ระหว่างที่สถานะยังไม่เปลี่ยน ก็ยังถูกดึงกลับให้ตรงกับระยะจริงได้ — กันสแปมแจ้งเตือนด้วย
+    # เช็ค locked ปัจจุบัน != new_locked ก่อนเขียน/แจ้งเตือนอยู่แล้ว (ผ่าน debounce ครบ
+    # OWNER_STATUS_SAMPLE_COUNT ครั้งแล้วเท่านั้น ไม่ใช่ทุก ping)
     update_fields: dict = {"owner_tracking": owner_tracking}
     lock_notification: dict | None = None
-    if status != previous_status and status in ("NEAR", "AWAY"):
+    if status in ("NEAR", "AWAY"):
         new_locked = status == "AWAY"
         if bool(vehicle.get("locked", False)) != new_locked:
             update_fields["locked"] = new_locked
