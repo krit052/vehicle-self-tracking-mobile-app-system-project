@@ -528,7 +528,9 @@ class _VehicleCardState extends State<_VehicleCard> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _dirty = false;
+        // ถ้าอัปโหลดรูปพัง ให้ _dirty ค้างเป็น true ต่อ (รูปที่เลือกไว้ยังไม่ถูกเซฟจริง)
+        // จะได้ยังกดยกเลิกการแก้ไข/ลองเซฟใหม่ได้
+        _dirty = photoError != null;
         if (photoError == null) {
           final images =
               (result['images'] as Map?)?.cast<String, dynamic>() ?? {};

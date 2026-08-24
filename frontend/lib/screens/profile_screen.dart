@@ -106,9 +106,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _saveProfile(String name, String email) async {
+  /// คืน null เมื่อบันทึกสำเร็จ, คืนข้อความ error ถ้าล้มเหลว (sheet เอาไปโชว์เป็น popup)
+  Future<String?> _saveProfile(String name, String email) async {
     final token = await _getToken();
-    if (token == null) return;
+    if (token == null) return 'Not logged in.';
     try {
       final res =
           await Dio(
@@ -126,9 +127,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       UserSession.instance.user = updated;
       setState(() => _user = updated);
       _showSnack('Profile updated');
+      return null;
     } on DioException catch (e) {
-      final msg = e.response?.data?['detail']?.toString() ?? 'Update failed';
-      _showSnack(msg, isError: true);
+      // 409 = อีเมลนี้ถูกใช้กับบัญชีอื่นแล้ว (backend เช็คใน update_profile)
+      return e.response?.statusCode == 409
+          ? 'This lamduan email address already exists and cannot be changed.'
+          : e.response?.data?['detail']?.toString() ?? 'Update failed';
     }
   }
 
@@ -259,7 +263,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildBody() {
     final displayName = _user?['name'] as String? ?? 'MFU Student';
     final email = _user?['email'] as String? ?? '';
-    final studentId = _user?['id'] as String? ?? '—';
+    // Student ID = ส่วนหน้า @ ของ lamduan mail (เช่น 6631501042@lamduan.mfu.ac.th)
+    final studentId = email.contains('@') ? email.split('@').first : '—';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
@@ -497,7 +502,7 @@ class _Divider extends StatelessWidget {
 class _EditProfileSheet extends StatefulWidget {
   final String initialName;
   final String initialEmail;
-  final Future<void> Function(String name, String email) onSave;
+  final Future<String?> Function(String name, String email) onSave;
 
   const _EditProfileSheet({
     required this.initialName,
@@ -533,8 +538,30 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await widget.onSave(_nameCtrl.text.trim(), _emailCtrl.text.trim());
-      if (mounted) Navigator.of(context).pop();
+      // ปิด sheet ต่อเมื่อบันทึกสำเร็จจริงเท่านั้น — ถ้าอีเมลซ้ำ (409) ให้ค้าง sheet ไว้
+      // แล้วเด้ง popup แจ้งแทน snackbar (เห็นชัดกว่า ต้องกด OK ถึงจะปิด บังคับให้รับรู้)
+      final error = await widget.onSave(
+        _nameCtrl.text.trim(),
+        _emailCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      if (error == null) {
+        Navigator.of(context).pop();
+      } else {
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Could not save'),
+            content: Text(error),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

@@ -1052,6 +1052,33 @@ def mark_read(notification_id: str, current_user: dict = Depends(get_current_use
     return {"ok": True}
 
 
+@app.patch("/notifications/read-all")
+def mark_all_read(current_user: dict = Depends(get_current_user)):
+    """ทำเครื่องหมายอ่านแล้วทั้งหมดของ user คนนี้ (ทั้ง native และที่แมตช์ป้ายจาก AI)"""
+    alerts_col = db["notifications"]
+
+    # 1) การแจ้งเตือนที่ backend สร้างเอง
+    native = alerts_col.update_many(
+        {"user_id": current_user["sub"], "read": {"$ne": True}},
+        {"$set": {"read": True}},
+    ).modified_count
+
+    # 2) การแจ้งเตือนจาก AI ที่แมตช์ป้ายรถของ user (ไม่มี user_id)
+    ai_updated = 0
+    vehicle = vehicles_col.find_one({"user_id": current_user["sub"]})
+    if vehicle:
+        ai_docs = alerts_col.find(
+            {"user_id": {"$exists": False}, "license_plate_text": {"$exists": True}},
+        )
+        stale_ids = [d["_id"] for d in ai_docs if _ai_plate_matches(d, vehicle)]
+        if stale_ids:
+            ai_updated = alerts_col.update_many(
+                {"_id": {"$in": stale_ids}}, {"$set": {"read": True}}
+            ).modified_count
+
+    return {"ok": True, "updated": native + ai_updated}
+
+
 @app.delete("/notifications/{notification_id}")
 def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
     """ลบการแจ้งเตือน 1 รายการ (ตรวจความเป็นเจ้าของแบบเดียวกับ mark_read)"""

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../providers/firebase_messaging.dart' show registerFcmToken;
 import '../theme/app_theme.dart';
 import 'login_screen.dart' show UserSession;
 
@@ -50,6 +51,9 @@ class _SplashScreenState extends State<SplashScreen> {
       UserSession.instance.token = token;
       UserSession.instance.role = user['role'] as String? ?? 'user';
       UserSession.instance.user = user;
+      // ผูก FCM token ของเครื่องนี้ใหม่ทุกครั้งที่ resume session ค้างไว้ (ไม่ได้ผ่านหน้า
+      // login) เผื่อ token หมุนใหม่ระหว่างที่ผู้ใช้ไม่เคย logout เลย — fire-and-forget
+      registerFcmToken(_baseUrl, token);
       _goTo(UserSession.instance.role == 'admin' ? '/admin-home' : '/home');
     } on DioException catch (e) {
       // 401/403 = token หมดอายุหรือถูกเพิกถอน → ล้างแล้วไป login

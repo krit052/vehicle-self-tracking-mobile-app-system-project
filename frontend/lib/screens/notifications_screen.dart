@@ -103,12 +103,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _markAllRead() async {
-    final unreadIds = _alerts.where((a) => !a.read).map((a) => a.id).toList();
-    if (unreadIds.isEmpty) return;
-    for (final id in unreadIds) {
-      try {
-        await _dio.patch('/notifications/$id/read');
-      } catch (_) {}
+    if (_alerts.every((a) => a.read)) return;
+    try {
+      await _dio.patch('/notifications/read-all');
+    } catch (_) {
+      return;
     }
     if (!mounted) return;
     setState(() {
