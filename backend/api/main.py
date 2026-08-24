@@ -1624,6 +1624,18 @@ def update_owner_location(
         new_locked = status == "AWAY"
         if bool(vehicle.get("locked", False)) != new_locked:
             update_fields["locked"] = new_locked
+            if not new_locked:
+                # ปลดล็อคแล้ว → ลบจุดตรวจจับเดิม (last_detection) ทิ้ง กันไม่ให้ auto-lock
+                # เอาจุดเก่า (ที่เจ้าของกำลังขับออกห่างไป) มาคำนวณระยะจนล็อคซ้ำทันทีที่ออก
+                # นอกรัศมี 5m — ต้องรอกล้องเห็นป้ายอีกครั้ง (จอดรอบใหม่) ก่อนถึงจะเริ่มนับ
+                # ระยะล็อคอัตโนมัติใหม่ได้ (ดู /internal/plate-detected)
+                update_fields["last_detection"] = None
+                owner_tracking["status"] = "UNKNOWN"
+                owner_tracking["parking_latitude"] = None
+                owner_tracking["parking_longitude"] = None
+                owner_tracking["distance_from_parking_m"] = None
+                owner_tracking["away_sample_count"] = 0
+                owner_tracking["near_sample_count"] = 0
             plate = _plate_with_province(vehicle)
             if new_locked:
                 alert_type, title, body = (
@@ -1735,15 +1747,25 @@ def update_lock(
             detail="Invalid vehicle id"
         )
 
+    update: dict = {"locked": data.locked}
+    if not data.locked:
+        # ปลดล็อคเอง (manual) → เคลียร์ last_detection เหมือนตอนปลดล็อคอัตโนมัติ กันไม่ให้
+        # auto-lock เอาจุดตรวจจับเดิมมาคำนวณระยะจนล็อคซ้ำทันทีที่ขับออกนอกรัศมี 5m
+        update["last_detection"] = None
+        update["owner_tracking.status"] = "UNKNOWN"
+        update["owner_tracking.parking_latitude"] = None
+        update["owner_tracking.parking_longitude"] = None
+        update["owner_tracking.distance_from_parking_m"] = None
+        update["owner_tracking.away_sample_count"] = 0
+        update["owner_tracking.near_sample_count"] = 0
+
     result = vehicles_col.update_one(
         {
             "_id": vehicle_id,
             "user_id": user["sub"]
         },
         {
-            "$set": {
-                "locked": data.locked
-            }
+            "$set": update
         }
     )
 
