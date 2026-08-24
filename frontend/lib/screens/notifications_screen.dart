@@ -368,15 +368,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       actions: [
         if (_alerts.isNotEmpty) ...[
-          if (_alerts.any((a) => !a.read))
-            TextButton(
-              onPressed: _markAllRead,
-              style: TextButton.styleFrom(foregroundColor: AppColors.onPrimary),
-              child: const Text(
-                'Read all',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
           IconButton(
             icon: const Icon(Icons.checklist),
             tooltip: 'Select',
@@ -773,6 +764,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (_alerts.any((a) => !a.read))
+            TextButton(
+              onPressed: _markAllRead,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text(
+                'Read all',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
           TextButton.icon(
             onPressed: () => setState(() {
               _showAll = !_showAll;
@@ -1108,9 +1112,9 @@ class _AlertCard extends StatelessWidget {
     'MOVED' => const Color(0xFFE65100),
     'LOST' => AppColors.error,
     'UNAUTHORIZED_MOVE' => AppColors.error,
-    'PLATE_DETECTED' => AppColors.blue,
+    'PLATE_DETECTED' => AppColors.purple,
     'AUTO_LOCKED' => AppColors.green,
-    'AUTO_UNLOCKED' => const Color(0xFFE65100),
+    'AUTO_UNLOCKED' => AppColors.blue,
     _ => AppColors.onSurfaceVariant,
   };
 
@@ -1172,8 +1176,8 @@ class _AlertIcon extends StatelessWidget {
       ),
       'PLATE_DETECTED' => (
         Icons.pin_outlined,
-        const Color(0xFFE3F2FD),
-        AppColors.blue,
+        const Color(0xFFF3E5F5),
+        AppColors.purple,
       ),
       'AUTO_LOCKED' => (
         Icons.lock_outline,
@@ -1182,8 +1186,8 @@ class _AlertIcon extends StatelessWidget {
       ),
       'AUTO_UNLOCKED' => (
         Icons.lock_open_outlined,
-        const Color(0xFFFFF3E0),
-        const Color(0xFFE65100),
+        const Color(0xFFE3F2FD),
+        AppColors.blue,
       ),
       _ => (
         Icons.notifications_outlined,

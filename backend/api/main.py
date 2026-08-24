@@ -538,11 +538,12 @@ def _check_departed_locked_vehicles() -> None:
         if _owner_status_is_near(v):
             continue
 
+        plate_display = _plate_with_province(v)
         db["notifications"].insert_one({
             "user_id": v["user_id"],
             "alert_type": "UNAUTHORIZED_MOVE",
             "snapshot_url": "",
-            "license_plate": v.get("license_plate", ""),
+            "license_plate": plate_display,
             "camera_name": ld.get("camera_name", ""),
             "created_at": now,
             "read": False,
@@ -550,11 +551,11 @@ def _check_departed_locked_vehicles() -> None:
         _push_to_user(
             v["user_id"],
             "Vehicle lost!!!",
-            (v.get("license_plate", "") +
+            (plate_display +
              (f" left {ld.get('camera_name')}" if ld.get("camera_name") else " left the camera") +
              " while locked"),
             data={"alert_type": "UNAUTHORIZED_MOVE",
-                  "license_plate": v.get("license_plate", ""),
+                  "license_plate": plate_display,
                   "camera_name": ld.get("camera_name", "")},
         )
         vehicles_col.update_one(
@@ -906,6 +907,21 @@ def _normalize_plate(s: str) -> str:
     """ตัดช่องว่างทั้งหมดและทำเป็นตัวพิมพ์ใหญ่ เพื่อใช้เทียบป้ายข้ามฟอร์แมต
     (ตัวพิมพ์ใหญ่ไม่กระทบอักษรไทย แต่ช่วยเวลาป้ายมีตัวอังกฤษ)"""
     return "".join((s or "").split()).upper()
+
+
+def _plate_with_province(vehicle: dict) -> str:
+    """ป้าย + จังหวัด สำหรับ "แสดงผล" ในแจ้งเตือนเท่านั้น (Vehicle lost / Auto-Locked /
+    Auto-Unlocked) ให้หน้าตาตรงกับที่ PLATE_DETECTED โชว์: "ตัวอักษร+เลข จังหวัด เลขทะเบียน"
+    (เช่น "2กฏ เชียงราย 2026") — ห้ามเอาไปใช้จับคู่ป้าย จังหวัดยังคงไม่มีผลต่อการตรวจจับเลย
+    (ดู _ai_plate_matches)"""
+    plate = (vehicle.get("license_plate") or "").strip()
+    province = (vehicle.get("province") or "").strip()
+    if not province:
+        return plate
+    parts = plate.split(None, 1)
+    if len(parts) == 2:
+        return f"{parts[0]} {province} {parts[1]}"
+    return f"{plate} {province}".strip()
 
 
 def _ai_plate_matches(doc: dict, vehicle: dict) -> bool:
@@ -1581,7 +1597,7 @@ def update_owner_location(
         new_locked = status == "AWAY"
         if bool(vehicle.get("locked", False)) != new_locked:
             update_fields["locked"] = new_locked
-            plate = vehicle.get("license_plate", "")
+            plate = _plate_with_province(vehicle)
             if new_locked:
                 alert_type, title, body = (
                     "AUTO_LOCKED",
@@ -1607,7 +1623,7 @@ def update_owner_location(
             "user_id": current_user["sub"],
             "alert_type": lock_notification["alert_type"],
             "snapshot_url": "",
-            "license_plate": vehicle.get("license_plate", ""),
+            "license_plate": _plate_with_province(vehicle),
             "camera_name": "",
             "created_at": now,
             "read": False,
@@ -1618,7 +1634,7 @@ def update_owner_location(
             lock_notification["body"],
             data={"alert_type": lock_notification["alert_type"],
                   "vehicle_id": vehicle_id,
-                  "license_plate": vehicle.get("license_plate", "")},
+                  "license_plate": plate},
         )
     owner_locations_col.insert_one({
         "user_id": current_user["sub"],

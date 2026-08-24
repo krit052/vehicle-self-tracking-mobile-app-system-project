@@ -22,6 +22,7 @@ class AppColors {
   static const onError = Color(0xFFFFFFFF);
   static const green = Color(0xFF4CAF50);
   static const blue = Color(0xFF2196F3);
+  static const purple = Color(0xFF9C27B0);
 }
 
 class AppTheme {
