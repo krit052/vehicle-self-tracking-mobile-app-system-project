@@ -90,6 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
               vehicleId: vehicle['id'] as String,
               vehicleName: vehicle['model'] as String? ?? 'My Vehicle',
               licensePlate: vehicle['license_plate'] as String? ?? '—',
+              province: vehicle['province'] as String? ?? '',
             )
           : noVehicleView,
       const VehicleProfileScreen(),

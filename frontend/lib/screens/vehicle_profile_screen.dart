@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
+import '../utils/plate_format.dart';
 import 'login_screen.dart' show UserSession;
 import '../widgets/notification_bell.dart';
 
@@ -609,7 +610,7 @@ class _VehicleCardState extends State<_VehicleCard> {
   @override
   Widget build(BuildContext context) {
     final label = _plateCtrl.text.isNotEmpty
-        ? _plateCtrl.text
+        ? formatPlateWithProvince(_plateCtrl.text, _provinceCtrl.text)
         : 'Motorcycle Profile ${widget.index + 1}';
 
     return Container(
