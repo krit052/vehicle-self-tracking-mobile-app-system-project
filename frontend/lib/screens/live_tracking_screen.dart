@@ -7,18 +7,21 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/owner_tracking_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/plate_format.dart';
 import 'login_screen.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
   final String vehicleId;
   final String vehicleName;
   final String licensePlate;
+  final String province;
 
   const LiveTrackingScreen({
     super.key,
     required this.vehicleId,
     required this.vehicleName,
     required this.licensePlate,
+    this.province = '',
   });
 
   @override
@@ -58,6 +61,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
   late String _vehicleName = widget.vehicleName;
   late String _licensePlate = widget.licensePlate;
+  late String _province = widget.province;
   bool _vehicleInfoLoading = false;
 
   // ซ่อนตำแหน่งกล้องบนแผนที่สำหรับ user ทั่วไป — admin เท่านั้นที่เห็นหมุดกล้อง
@@ -289,6 +293,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         if (vehicle['license_plate'] != null) {
           _licensePlate = vehicle['license_plate'];
         }
+        if (vehicle['province'] != null) _province = vehicle['province'];
         // ✅ sync locked from backend/mongo
         _locked = (vehicle['locked'] as bool?) ?? false;
         final owner = vehicle['owner_tracking'];
@@ -705,7 +710,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
                       ),
                     ),
                     Text(
-                      _licensePlate,
+                      formatPlateWithProvince(_licensePlate, _province),
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.onSurfaceVariant,
