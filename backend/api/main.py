@@ -116,7 +116,7 @@ DETECTION_PRESENCE_SECONDS = int(os.environ.get("DETECTION_PRESENCE_SECONDS", 90
 # ทุกกี่วินาทีให้ background watcher เช็กว่ามีรถ locked ตัวไหน "หายไปจากกล้อง" แล้วบ้าง
 DEPARTURE_CHECK_SECONDS = int(os.environ.get("DEPARTURE_CHECK_SECONDS", 30))
 # กล้องไม่เห็นรถ locked นานเกินกี่วิ ถึงจะถือว่า "หาย" → หมุดรถบนแผนที่หายไปด้วย (ดู
-# _last_detection_public) และเริ่มยิง UNAUTHORIZED_MOVE (แยกจาก DETECTION_PRESENCE_SECONDS
+# _last_detection_public) และเริ่มยิง LOST (แยกจาก DETECTION_PRESENCE_SECONDS
 # เพราะตัวนั้นคุมเรื่องกันแจ้งซ้ำของ PLATE_DETECTED ต่างหาก ไม่อยากให้กระทบกันตอนปรับค่านี้
 # ไวๆ เพื่อเทส — ค่าเริ่มต้น 60 วิ = 1 นาที สำหรับเทสระบบ)
 VEHICLE_LOST_SECONDS = int(os.environ.get("VEHICLE_LOST_SECONDS", 60))
@@ -503,7 +503,7 @@ def _owner_status_is_near(vehicle: dict) -> bool:
 
 
 def _check_departed_locked_vehicles() -> None:
-    """หา 'รถที่ล็อกอยู่แล้วหายไปจากกล้อง' → ยิงแจ้งเตือน UNAUTHORIZED_MOVE ('Vehicle lost!!!')
+    """หา 'รถที่ล็อกอยู่แล้วหายไปจากกล้อง' → ยิงแจ้งเตือน LOST ('Vehicle lost!!!')
     ซ้ำได้สูงสุด VEHICLE_LOST_ALERT_MAX ครั้งต่อการหายไปหนึ่งครั้ง ห่างกันครั้งละอย่างน้อย
     VEHICLE_LOST_ALERT_INTERVAL_SECONDS วิ
 
@@ -541,7 +541,7 @@ def _check_departed_locked_vehicles() -> None:
         plate_display = _plate_with_province(v)
         db["notifications"].insert_one({
             "user_id": v["user_id"],
-            "alert_type": "UNAUTHORIZED_MOVE",
+            "alert_type": "LOST",
             "snapshot_url": "",
             "license_plate": plate_display,
             "camera_name": ld.get("camera_name", ""),
@@ -554,7 +554,7 @@ def _check_departed_locked_vehicles() -> None:
             (plate_display +
              (f" left {ld.get('camera_name')}" if ld.get("camera_name") else " left the camera") +
              " while locked"),
-            data={"alert_type": "UNAUTHORIZED_MOVE",
+            data={"alert_type": "LOST",
                   "license_plate": plate_display,
                   "camera_name": ld.get("camera_name", "")},
         )
@@ -565,7 +565,7 @@ def _check_departed_locked_vehicles() -> None:
                 "last_detection.lost_alert_last_at": now,
             }},
         )
-        print(f"[departure-watcher] UNAUTHORIZED_MOVE ({alert_count + 1}/{VEHICLE_LOST_ALERT_MAX}) "
+        print(f"[departure-watcher] LOST ({alert_count + 1}/{VEHICLE_LOST_ALERT_MAX}) "
               f"→ {v.get('license_plate','')} left {ld.get('camera_name','')}")
 
 
@@ -1868,7 +1868,7 @@ def report_plate_detected(
 
         # การตรวจเจอป้าย = "รถถูกตรวจจับ" เสมอ (ไม่ใช่การเคลื่อนย้าย) → PLATE_DETECTED
         # แม้รถจะอยู่สถานะ locked ก็ตาม — ส่วนแจ้งเตือน "เคลื่อนย้ายโดยไม่ได้รับอนุญาต"
-        # (UNAUTHORIZED_MOVE) อยู่ที่ background departure watcher / geofence แยกต่างหาก
+        # (LOST) อยู่ที่ background departure watcher / geofence แยกต่างหาก
         alert_type = "PLATE_DETECTED"
         db["notifications"].insert_one({
             "user_id": vehicle["user_id"],
@@ -1906,7 +1906,7 @@ def report_vehicle_exit_event(
     """Called by the camera detection system whenever it reports where it saw
     a vehicle. If that position is farther from the camera than the
     vehicle's geofence_radius_m, the vehicle has left the camera's range —
-    the owner is notified. The alert is more urgent (UNAUTHORIZED_MOVE)
+    the owner is notified. The alert is more urgent (LOST)
     if the owner hasn't unlocked the vehicle first, otherwise it's a
     routine MOVED alert."""
     try:
@@ -1943,7 +1943,7 @@ def report_vehicle_exit_event(
             "owner_status": "NEAR",
         }
 
-    alert_type = "UNAUTHORIZED_MOVE" if vehicle.get("locked", False) else "MOVED"
+    alert_type = "LOST" if vehicle.get("locked", False) else "MOVED"
     notification = {
         "user_id": vehicle["user_id"],
         "alert_type": alert_type,
