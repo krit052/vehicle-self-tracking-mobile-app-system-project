@@ -1,8 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
-import 'login_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -12,8 +13,6 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
-
   List<_AlertItem> _alerts = [];
   bool _loading = true;
   String? _error;
@@ -46,15 +45,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.dispose();
   }
 
-  Dio get _dio {
-    final token = UserSession.instance.token;
-    return Dio(BaseOptions(
-      baseUrl: _baseUrl,
-      headers: token != null ? {'Authorization': 'Bearer $token'} : {},
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ));
-  }
+  Dio get _dio => ApiClient.instance.dio;
 
   Future<void> _fetchNotifications() async {
     if (UserSession.instance.token == null) {

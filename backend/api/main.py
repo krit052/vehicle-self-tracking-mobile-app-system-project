@@ -22,12 +22,13 @@ import secrets
 import threading
 import time
 
+from collections import defaultdict
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 from dotenv import load_dotenv
 # from email.mime.text import MIMEText
 # from email.mime.multipart import MIMEMultipart
-from fastapi import FastAPI, Header, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, Header, HTTPException, Depends, Request, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -94,6 +95,19 @@ OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", 5))
 OTP_PURPOSE_PASSWORD_RESET = "password_reset"
 CAMERAS_FILE = Path(__file__).parent.parent / "cameras.json"
 
+# ความยาวรหัสผ่านขั้นต่ำ ใช้ร่วมกันทั้งตอน register และ reset password (ต้องตรงกัน —
+# เดิม register ไม่เช็คเลยแต่ reset บังคับ 4 ตัว ทำให้สร้างบัญชีรหัสผ่านสั้นกว่าที่ reset ยอมได้)
+MIN_PASSWORD_LENGTH = int(os.environ.get("MIN_PASSWORD_LENGTH", 8))
+
+# Rate limit ของ /auth/login และ /auth/register กันการยิงสุ่มรหัสผ่าน/สแปมสมัครสมาชิก
+# เก็บ in-memory ต่อ process เท่านั้น (พอสำหรับ deploy เป็น backend instance เดียวตาม
+# docker-compose ปัจจุบัน — ถ้าในอนาคต scale เป็นหลาย instance ต้องย้ายไป shared store
+# เช่น Redis แทน ไม่งั้นแต่ละ instance จะนับแยกกันคนละชุด)
+LOGIN_RATE_LIMIT_MAX = int(os.environ.get("LOGIN_RATE_LIMIT_MAX", 10))
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("LOGIN_RATE_LIMIT_WINDOW_SECONDS", 300))
+REGISTER_RATE_LIMIT_MAX = int(os.environ.get("REGISTER_RATE_LIMIT_MAX", 5))
+REGISTER_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("REGISTER_RATE_LIMIT_WINDOW_SECONDS", 3600))
+
 # แหล่งข้อมูลกล้อง = CSV เดียวกับที่ ai_worker ใช้ (backend/cctv/RTSP-CCTV-new.csv)
 # ai_worker อ่าน CSV ตรง ๆ ส่วน backend/admin จะ sync CSV → Mongo แล้วเก็บเฉพาะ
 # "พิกัดที่ปักหมุด" (latitude/longitude/located) ต่อยอดบน Mongo
@@ -152,7 +166,12 @@ except Exception as e:
     print(f"❌ MongoDB connection failed: {e}")
 
 # ── Firebase Cloud Messaging (push) ───────────────────────────────────────────
-_FIREBASE_KEY = Path(__file__).parent.parent / "db_config" / "firebase-adminsdk-key-fbsvc-a8c8f167bd.json"
+# Path มาจาก env var เสมอ (เหมือน ai_worker) กันไม่ให้ต้องแก้โค้ดทุกครั้งที่หมุน/เปลี่ยนชื่อไฟล์คีย์
+# fallback เป็น path เดิมไว้เผื่อ .env ยังไม่ได้ตั้งค่า (ไม่ทำให้ deploy เดิมพัง)
+_FIREBASE_KEY = Path(
+    os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+    or (Path(__file__).parent.parent / "db_config" / "firebase-adminsdk-key-fbsvc-a8c8f167bd.json")
+)
 _fcm_ready = False
 try:
     if not firebase_admin._apps:
@@ -220,10 +239,46 @@ try:
         [("email", 1), ("purpose", 1), ("created_at", -1)],
         name="otp_codes_lookup",
     )
+    # query ที่ยิงบ่อยที่สุดในระบบ (ทุก request ที่ login แล้ว + departure watcher ทุก
+    # DEPARTURE_CHECK_SECONDS วิ) ใส่ index ไว้ตั้งแต่ต้น กันช้าลงเรื่อย ๆ ตามจำนวน user/รถที่โต
+    vehicles_col.create_index("user_id", name="vehicles_user_id")
+    vehicles_col.create_index(
+        [("locked", 1), ("last_detection", 1)], name="vehicles_locked_last_detection"
+    )
+    cameras_col.create_index("name", unique=True, name="cameras_name_unique")
+    db["notifications"].create_index(
+        [("user_id", 1), ("created_at", -1)], name="notifications_user_created"
+    )
+    db["notifications"].create_index(
+        "license_plate_text", name="notifications_license_plate_text"
+    )
 except Exception as e:
-    print(f"Warning: unable to ensure otp_codes indexes: {e}")
+    print(f"Warning: unable to ensure indexes: {e}")
 
 bearer_scheme = HTTPBearer()
+
+# ── Rate limiting (in-memory, ต่อ process — ดูคอมเมนต์ที่ LOGIN_RATE_LIMIT_MAX) ───────
+_rate_limit_hits: dict[str, list[float]] = defaultdict(list)
+_rate_limit_lock = threading.Lock()
+
+
+def _enforce_rate_limit(key: str, max_attempts: int, window_seconds: int) -> None:
+    """โยน 429 ถ้า key นี้ (เช่น "login:1.2.3.4") ยิงเกิน max_attempts ครั้งภายใน
+    window_seconds วิที่ผ่านมา ใช้กัน brute-force รหัสผ่าน/สแปมสมัครสมาชิก"""
+    now = time.time()
+    with _rate_limit_lock:
+        hits = _rate_limit_hits[key]
+        hits[:] = [t for t in hits if now - t < window_seconds]
+        if len(hits) >= max_attempts:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many attempts. Please try again later.",
+            )
+        hits.append(now)
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -579,6 +634,10 @@ def _departure_watcher_loop() -> None:
 
 
 # background thread คอยเช็กรถ locked ที่หายไปจากกล้อง (daemon → ปิดพร้อมเซิร์ฟเวอร์)
+# ⚠️ ผูกกับ 1 process: ถ้ารัน uvicorn ด้วย --workers > 1 หรือหลาย container/replica
+# watcher นี้จะวิ่งซ้ำกันหลายตัว ยิงแจ้งเตือน LOST ซ้ำ/แข่งกันเขียน DB ได้ ตอนนี้ deploy
+# เป็น backend instance เดียวตาม docker-compose จึงยังไม่มีปัญหา — ถ้าจะ scale ในอนาคต
+# ต้องย้าย watcher นี้ออกไปเป็น job แยกต่างหาก (เช่น cron container / APScheduler ภายนอก)
 threading.Thread(target=_departure_watcher_loop, daemon=True,
                  name="departure-watcher").start()
 print(f"✅ Departure watcher started (every {DEPARTURE_CHECK_SECONDS}s, "
@@ -599,7 +658,10 @@ class RegisterRequest(BaseModel):
 
 # ── login ───────────────────────────────────────────────────────────────────────
 @app.post("/auth/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, request: Request):
+    _enforce_rate_limit(
+        f"login:{_client_ip(request)}", LOGIN_RATE_LIMIT_MAX, LOGIN_RATE_LIMIT_WINDOW_SECONDS
+    )
     user = users_col.find_one({"$or": [{"email": req.email}, {"name": req.email}]})
     if not user or not verify_password(req.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -612,7 +674,12 @@ def login(req: LoginRequest):
 
 # ── register ───────────────────────────────────────────────────────────────────────
 @app.post("/auth/register")
-def register(req: RegisterRequest):
+def register(req: RegisterRequest, request: Request):
+    _enforce_rate_limit(
+        f"register:{_client_ip(request)}",
+        REGISTER_RATE_LIMIT_MAX,
+        REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    )
 
     email = req.email.strip().lower()
 
@@ -621,6 +688,14 @@ def register(req: RegisterRequest):
         raise HTTPException(
             status_code=400,
             detail="Only MFU email is allowed."
+        )
+
+    # เดิมไม่เช็คความยาวรหัสผ่านเลย (สมัครรหัสผ่านว่าง/1 ตัวอักษรได้) ทั้งที่ reset password
+    # บังคับขั้นต่ำไว้แล้ว — ใช้ค่าเดียวกัน (MIN_PASSWORD_LENGTH) ให้ตรงกันทั้งสองทาง
+    if len(req.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters",
         )
 
     # ตรวจสอบ email ซ้ำ
@@ -651,13 +726,17 @@ def register(req: RegisterRequest):
         "id": str(result.inserted_id)
     }
 
-# ── delete user ───────────────────────────────────────────────────────────────────────
+# ── delete user (admin only) ─────────────────────────────────────────────────────────
 @app.delete("/auth/user/{user_id}")
-def delete_user(user_id: str):
+def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
+    # 🔴 เดิม endpoint นี้ไม่มี auth guard เลย — ใครก็ยิง DELETE พร้อม ObjectId ก็ลบ user
+    # คนไหนก็ได้โดยไม่ต้อง login ด้วยซ้ำ ตอนนี้บังคับต้องเป็น admin เท่านั้น
+    try:
+        object_id = ObjectId(user_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid user id")
 
-    result = users_col.delete_one(
-        {"_id": ObjectId(user_id)}
-    )
+    result = users_col.delete_one({"_id": object_id})
 
     if result.deleted_count == 0:
         raise HTTPException(
@@ -841,8 +920,11 @@ def reset_password(req: ResetPasswordRequest):
 
     if not username:
         raise HTTPException(status_code=400, detail="Username is required")
-    if len(password) < 4:
-        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters",
+        )
     if not reset_token:
         raise HTTPException(status_code=400, detail="OTP verification is required")
 
@@ -1405,7 +1487,7 @@ def create_vehicle(req: VehicleCreate, current_user: dict = Depends(get_current_
         "license_plate": req.license_plate.strip().upper(),
         "province": req.province.strip(),
         "color": (req.color or "").strip(),
-        "detection": req.detection if hasattr(req, 'detection') else 1,
+        "detection": 1,
         "geofence_radius_m": req.geofence_radius_m,
         "locked": False,
         "created_at": datetime.now(timezone.utc),
@@ -1530,6 +1612,82 @@ class OwnerLocationRequest(BaseModel):
     accuracy: float | None = None
 
 
+def _compute_owner_status(
+    previous: dict, distance_m: float | None, accuracy_accepted: bool
+) -> tuple[str, int, int]:
+    """คำนวณสถานะ NEAR/AWAY/UNKNOWN จากระยะห่างล่าสุด (debounce ด้วย sample count กัน
+    GPS กระตุกแล้วสลับสถานะรัว ๆ) แยกออกมาเป็น pure function — ทดสอบได้โดยไม่ต้องแตะ DB/HTTP
+    คืน (status, away_sample_count, near_sample_count)"""
+    status = previous.get("status", "UNKNOWN")
+    away_samples = int(previous.get("away_sample_count", 0) or 0)
+    near_samples = int(previous.get("near_sample_count", 0) or 0)
+
+    if distance_m is not None and accuracy_accepted:
+        if distance_m > OWNER_AWAY_DISTANCE_M:
+            away_samples += 1
+            near_samples = 0
+            if away_samples >= OWNER_STATUS_SAMPLE_COUNT:
+                status = "AWAY"
+        elif distance_m <= OWNER_NEAR_DISTANCE_M:
+            near_samples += 1
+            away_samples = 0
+            if near_samples >= OWNER_STATUS_SAMPLE_COUNT:
+                status = "NEAR"
+        else:
+            away_samples = 0
+            near_samples = 0
+
+    return status, away_samples, near_samples
+
+
+def _resolve_auto_lock_transition(
+    vehicle: dict, status: str
+) -> tuple[bool | None, dict | None, dict]:
+    """ตัดสินใจว่าควร auto lock/unlock รถไหมจากสถานะ NEAR/AWAY ที่ debounce แล้ว (เรียกทุกครั้งที่
+    สถานะ "ยืนยัน" แล้ว ไม่ใช่แค่ตอนเพิ่งเปลี่ยน — ดู comment เดิมใน update_owner_location)
+
+    คืน (new_locked, lock_notification, owner_tracking_overrides):
+      - new_locked: None = ไม่ต้องเปลี่ยน locked ปัจจุบัน, ไม่งั้นคือค่า locked ใหม่
+      - lock_notification: {alert_type, title, body} ถ้าต้องแจ้งเตือน ไม่งั้น None
+      - owner_tracking_overrides: field ที่ต้อง reset ใน owner_tracking (ตอนปลดล็อคอัตโนมัติ
+        เท่านั้น — กัน auto-lock เอาจุดจอดเดิมมาคำนวณระยะจนล็อคซ้ำทันทีที่ขับออก)
+    """
+    if status not in ("NEAR", "AWAY"):
+        return None, None, {}
+
+    new_locked = status == "AWAY"
+    if bool(vehicle.get("locked", False)) == new_locked:
+        return None, None, {}
+
+    overrides: dict = {}
+    if not new_locked:
+        overrides = {
+            "status": "UNKNOWN",
+            "parking_latitude": None,
+            "parking_longitude": None,
+            "distance_from_parking_m": None,
+            "away_sample_count": 0,
+            "near_sample_count": 0,
+        }
+
+    plate = _plate_with_province(vehicle)
+    if new_locked:
+        notification = {
+            "alert_type": "AUTO_LOCKED",
+            "title": "Vehicle Auto-Locked",
+            "body": f"{plate} locked automatically — you moved more than "
+                    f"{OWNER_AWAY_DISTANCE_M:g}m away.".strip(),
+        }
+    else:
+        notification = {
+            "alert_type": "AUTO_UNLOCKED",
+            "title": "Vehicle Auto-Unlocked",
+            "body": f"{plate} unlocked automatically — you're back within "
+                    f"{OWNER_NEAR_DISTANCE_M:g}m.".strip(),
+        }
+    return new_locked, notification, overrides
+
+
 @app.put("/vehicles/{vehicle_id}/owner-location")
 def update_owner_location(
     vehicle_id: str,
@@ -1575,25 +1733,9 @@ def update_owner_location(
         )
 
     previous = vehicle.get("owner_tracking") or {}
-    previous_status = previous.get("status", "UNKNOWN")
-    status = previous_status
-    away_samples = int(previous.get("away_sample_count", 0) or 0)
-    near_samples = int(previous.get("near_sample_count", 0) or 0)
-
-    if distance_m is not None and accuracy_accepted:
-        if distance_m > OWNER_AWAY_DISTANCE_M:
-            away_samples += 1
-            near_samples = 0
-            if away_samples >= OWNER_STATUS_SAMPLE_COUNT:
-                status = "AWAY"
-        elif distance_m <= OWNER_NEAR_DISTANCE_M:
-            near_samples += 1
-            away_samples = 0
-            if near_samples >= OWNER_STATUS_SAMPLE_COUNT:
-                status = "NEAR"
-        else:
-            away_samples = 0
-            near_samples = 0
+    status, away_samples, near_samples = _compute_owner_status(
+        previous, distance_m, accuracy_accepted
+    )
 
     owner_tracking = {
         "latitude": data.latitude,
@@ -1617,52 +1759,32 @@ def update_owner_location(
     # แล้วเจ้าของอยู่ไกลอยู่แล้วตั้งแต่ต้น (ไม่ได้เพิ่งเดินออกมา) หรือมีคนไปกดล็อค/ปลดล็อคเอง
     # ระหว่างที่สถานะยังไม่เปลี่ยน ก็ยังถูกดึงกลับให้ตรงกับระยะจริงได้ — กันสแปมแจ้งเตือนด้วย
     # เช็ค locked ปัจจุบัน != new_locked ก่อนเขียน/แจ้งเตือนอยู่แล้ว (ผ่าน debounce ครบ
-    # OWNER_STATUS_SAMPLE_COUNT ครั้งแล้วเท่านั้น ไม่ใช่ทุก ping)
+    # OWNER_STATUS_SAMPLE_COUNT ครั้งแล้วเท่านั้น ไม่ใช่ทุก ping) — ดู _resolve_auto_lock_transition
     update_fields: dict = {"owner_tracking": owner_tracking}
-    lock_notification: dict | None = None
-    if status in ("NEAR", "AWAY"):
-        new_locked = status == "AWAY"
-        if bool(vehicle.get("locked", False)) != new_locked:
-            update_fields["locked"] = new_locked
-            if not new_locked:
-                # ปลดล็อคแล้ว → ลบจุดตรวจจับเดิม (last_detection) ทิ้ง กันไม่ให้ auto-lock
-                # เอาจุดเก่า (ที่เจ้าของกำลังขับออกห่างไป) มาคำนวณระยะจนล็อคซ้ำทันทีที่ออก
-                # นอกรัศมี 5m — ต้องรอกล้องเห็นป้ายอีกครั้ง (จอดรอบใหม่) ก่อนถึงจะเริ่มนับ
-                # ระยะล็อคอัตโนมัติใหม่ได้ (ดู /internal/plate-detected)
-                update_fields["last_detection"] = None
-                owner_tracking["status"] = "UNKNOWN"
-                owner_tracking["parking_latitude"] = None
-                owner_tracking["parking_longitude"] = None
-                owner_tracking["distance_from_parking_m"] = None
-                owner_tracking["away_sample_count"] = 0
-                owner_tracking["near_sample_count"] = 0
-            plate = _plate_with_province(vehicle)
-            if new_locked:
-                alert_type, title, body = (
-                    "AUTO_LOCKED",
-                    "Vehicle Auto-Locked",
-                    f"{plate} locked automatically — you moved more than "
-                    f"{OWNER_AWAY_DISTANCE_M:g}m away.".strip(),
-                )
-            else:
-                alert_type, title, body = (
-                    "AUTO_UNLOCKED",
-                    "Vehicle Auto-Unlocked",
-                    f"{plate} unlocked automatically — you're back within "
-                    f"{OWNER_NEAR_DISTANCE_M:g}m.".strip(),
-                )
-            lock_notification = {"alert_type": alert_type, "title": title, "body": body}
+    new_locked, lock_notification, owner_tracking_overrides = _resolve_auto_lock_transition(
+        vehicle, status
+    )
+    if new_locked is not None:
+        update_fields["locked"] = new_locked
+        if not new_locked:
+            # ปลดล็อคแล้ว → ลบจุดตรวจจับเดิม (last_detection) ทิ้ง กันไม่ให้ auto-lock
+            # เอาจุดเก่า (ที่เจ้าของกำลังขับออกห่างไป) มาคำนวณระยะจนล็อคซ้ำทันทีที่ออก
+            # นอกรัศมี 5m — ต้องรอกล้องเห็นป้ายอีกครั้ง (จอดรอบใหม่) ก่อนถึงจะเริ่มนับ
+            # ระยะล็อคอัตโนมัติใหม่ได้ (ดู /internal/plate-detected)
+            update_fields["last_detection"] = None
+        owner_tracking.update(owner_tracking_overrides)
 
     vehicles_col.update_one(
         {"_id": object_id, "user_id": current_user["sub"]},
         {"$set": update_fields},
     )
     if lock_notification is not None:
+        plate = _plate_with_province(vehicle)
         db["notifications"].insert_one({
             "user_id": current_user["sub"],
             "alert_type": lock_notification["alert_type"],
             "snapshot_url": "",
-            "license_plate": _plate_with_province(vehicle),
+            "license_plate": plate,
             "camera_name": "",
             "created_at": now,
             "read": False,

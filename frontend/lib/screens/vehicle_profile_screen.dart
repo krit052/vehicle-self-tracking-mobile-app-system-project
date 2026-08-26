@@ -4,12 +4,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/plate_format.dart';
-import 'login_screen.dart' show UserSession;
 import '../widgets/notification_bell.dart';
-
-const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
 const _imageSlotLabels = [
   'Front View',
@@ -40,14 +39,15 @@ Future<Map<String, dynamic>> _uploadVehiclePhotos({
           filename: entry.value!.path.split(Platform.pathSeparator).last,
         ),
   });
-  final res = await Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
+  final res = await ApiClient.instance.dio.post(
+    '/vehicles/$vehicleId/photos',
+    data: formData,
+    options: Options(
       headers: {'Authorization': 'Bearer $token'},
-      connectTimeout: const Duration(seconds: 20),
+      sendTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 20),
     ),
-  ).post('/vehicles/$vehicleId/photos', data: formData);
+  );
   return res.data as Map<String, dynamic>;
 }
 
@@ -83,14 +83,10 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
     final token = session.token;
     if (token == null) return;
     try {
-      final res = await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          headers: {'Authorization': 'Bearer $token'},
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 5),
-        ),
-      ).get('/auth/me');
+      final res = await ApiClient.instance.dio.get(
+        '/auth/me',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       session.user = Map<String, dynamic>.from(res.data as Map);
       if (mounted) setState(() => _userName = session.user!['name'] as String?);
     } catch (_) {}
@@ -119,14 +115,10 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
       return;
     }
     try {
-      final res = await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-          headers: {'Authorization': 'Bearer $token'},
-        ),
-      ).get('/vehicles');
+      final res = await ApiClient.instance.dio.get(
+        '/vehicles',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       setState(() {
         _vehicles = (res.data as List).cast<Map<String, dynamic>>();
         _loading = false;
@@ -259,14 +251,10 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
     final vehicleId = _vehicles[index]['id'] as String?;
     if (token == null || vehicleId == null) return;
     try {
-      await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          headers: {'Authorization': 'Bearer $token'},
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-        ),
-      ).delete('/vehicles/$vehicleId');
+      await ApiClient.instance.dio.delete(
+        '/vehicles/$vehicleId',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       if (!mounted) return;
       setState(() {
         _vehicles = [..._vehicles]..removeAt(index);
@@ -490,24 +478,17 @@ class _VehicleCardState extends State<_VehicleCard> {
 
     setState(() => _saving = true);
     try {
-      final patchRes =
-          await Dio(
-            BaseOptions(
-              baseUrl: _baseUrl,
-              headers: {'Authorization': 'Bearer $token'},
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 5),
-            ),
-          ).patch(
-            '/vehicles/$vehicleId',
-            data: {
-              'model': _modelCtrl.text.trim(),
-              'license_plate': _plateCtrl.text.trim(),
-              'province': _provinceCtrl.text.trim(),
-              'color': _colorCtrl.text.trim(),
-              'geofence_radius_m': int.tryParse(_geofenceCtrl.text) ?? 50,
-            },
-          );
+      final patchRes = await ApiClient.instance.dio.patch(
+        '/vehicles/$vehicleId',
+        data: {
+          'model': _modelCtrl.text.trim(),
+          'license_plate': _plateCtrl.text.trim(),
+          'province': _provinceCtrl.text.trim(),
+          'color': _colorCtrl.text.trim(),
+          'geofence_radius_m': int.tryParse(_geofenceCtrl.text) ?? 50,
+        },
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       var result = patchRes.data as Map<String, dynamic>;
 
       String? photoError;
@@ -897,19 +878,11 @@ class _DetectionThresholdCardState extends State<_DetectionThresholdCard> {
 
     if (token == null) return;
 
-    final dio = Dio(
-      BaseOptions(
-        baseUrl: _baseUrl,
-
-        headers: {"Authorization": "Bearer $token"},
-      ),
-    );
-
     try {
-      await dio.put(
+      await ApiClient.instance.dio.put(
         "/vehicle/detection",
-
         data: {"vehicle_id": widget.vehicleId, "detection": _selectedDelay},
+        options: Options(headers: {"Authorization": "Bearer $token"}),
       );
 
       if (!mounted) return;
@@ -1054,24 +1027,17 @@ class _AddVehicleSheetState extends State<_AddVehicleSheet> {
       _error = null;
     });
     try {
-      final createRes =
-          await Dio(
-            BaseOptions(
-              baseUrl: _baseUrl,
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 5),
-              headers: {'Authorization': 'Bearer ${widget.token}'},
-            ),
-          ).post(
-            '/vehicles',
-            data: {
-              'model': _modelCtrl.text.trim(),
-              'license_plate': _plateCtrl.text.trim(),
-              'province': _provinceCtrl.text.trim(),
-              'color': _colorCtrl.text.trim(),
-              'geofence_radius_m': 5,
-            },
-          );
+      final createRes = await ApiClient.instance.dio.post(
+        '/vehicles',
+        data: {
+          'model': _modelCtrl.text.trim(),
+          'license_plate': _plateCtrl.text.trim(),
+          'province': _provinceCtrl.text.trim(),
+          'color': _colorCtrl.text.trim(),
+          'geofence_radius_m': 5,
+        },
+        options: Options(headers: {'Authorization': 'Bearer ${widget.token}'}),
+      );
       final vehicle = createRes.data as Map<String, dynamic>;
 
       widget.onCreated(vehicle);

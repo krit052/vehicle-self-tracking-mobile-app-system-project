@@ -3,9 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../providers/firebase_messaging.dart' show unregisterFcmToken;
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
-import 'login_screen.dart' show UserSession;
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,8 +16,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
-
   final _storage = const FlutterSecureStorage();
 
   Map<String, dynamic>? _user;
@@ -48,14 +47,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final token = session.token;
     if (token == null) return;
     try {
-      final res = await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          headers: {'Authorization': 'Bearer $token'},
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 5),
-        ),
-      ).get('/auth/me');
+      final res = await ApiClient.instance.dio.get(
+        '/auth/me',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       session.user = Map<String, dynamic>.from(res.data as Map);
       if (mounted) setState(() => _userName = session.user!['name'] as String?);
     } catch (_) {}
@@ -74,17 +69,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (token == null) {
         return;
       }
-      final res =
-          await Dio(
-            BaseOptions(
-              baseUrl: _baseUrl,
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 5),
-            ),
-          ).get(
-            '/auth/me',
-            options: Options(headers: {'Authorization': 'Bearer $token'}),
-          );
+      final res = await ApiClient.instance.dio.get(
+        '/auth/me',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       final user = Map<String, dynamic>.from(res.data);
       UserSession.instance.user = user;
       setState(() {
@@ -111,18 +99,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final token = await _getToken();
     if (token == null) return 'Not logged in.';
     try {
-      final res =
-          await Dio(
-            BaseOptions(
-              baseUrl: _baseUrl,
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 5),
-            ),
-          ).patch(
-            '/auth/profile',
-            data: {'name': name, 'email': email},
-            options: Options(headers: {'Authorization': 'Bearer $token'}),
-          );
+      final res = await ApiClient.instance.dio.patch(
+        '/auth/profile',
+        data: {'name': name, 'email': email},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       final updated = Map<String, dynamic>.from(res.data);
       UserSession.instance.user = updated;
       setState(() => _user = updated);
@@ -159,7 +140,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final token = await _getToken();
     if (token != null) {
-      await unregisterFcmToken(_baseUrl, token);
+      await unregisterFcmToken(token);
     }
 
     try {

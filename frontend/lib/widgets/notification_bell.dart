@@ -1,7 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
-import '../screens/login_screen.dart';
 import '../screens/notifications_screen.dart';
 
 /// แหล่งความจริง "เดียว" ของจำนวนแจ้งเตือนที่ยังไม่อ่าน (unread)
@@ -9,7 +9,6 @@ import '../screens/notifications_screen.dart';
 class NotificationCenter {
   NotificationCenter._();
   static final NotificationCenter instance = NotificationCenter._();
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
   final ValueNotifier<int> unread = ValueNotifier(0);
 
@@ -18,17 +17,9 @@ class NotificationCenter {
 
   /// ดึงจาก backend มานับ unread ใหม่
   Future<void> refresh() async {
-    final token = UserSession.instance.token;
-    if (token == null) return;
+    if (UserSession.instance.token == null) return;
     try {
-      final res = await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          headers: {'Authorization': 'Bearer $token'},
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-        ),
-      ).get('/notifications');
+      final res = await ApiClient.instance.dio.get('/notifications');
       final data = (res.data as List).cast<Map<String, dynamic>>();
       unread.value =
           data.where((n) => (n['read'] as bool? ?? false) == false).length;

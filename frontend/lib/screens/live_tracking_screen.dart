@@ -5,10 +5,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import '../services/api_client.dart';
 import '../services/owner_tracking_service.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/plate_format.dart';
-import 'login_screen.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
   final String vehicleId;
@@ -30,7 +31,6 @@ class LiveTrackingScreen extends StatefulWidget {
 
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   static const _mfuCenter = LatLng(20.0459, 99.8934);
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
   static const _ownerUploadInterval = Duration(seconds: 5);
 
   final _mapController = MapController();
@@ -180,22 +180,15 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     _lastOwnerUploadAt = DateTime.now();
 
     try {
-      final res =
-          await Dio(
-            BaseOptions(
-              baseUrl: _baseUrl,
-              headers: {'Authorization': 'Bearer $token'},
-              connectTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 5),
-            ),
-          ).put(
-            '/vehicles/${widget.vehicleId}/owner-location',
-            data: {
-              'latitude': position.latitude,
-              'longitude': position.longitude,
-              'accuracy': position.accuracy,
-            },
-          );
+      final res = await ApiClient.instance.dio.put(
+        '/vehicles/${widget.vehicleId}/owner-location',
+        data: {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracy': position.accuracy,
+        },
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
 
       final vehicle = Map<String, dynamic>.from(res.data as Map);
       final owner = vehicle['owner_tracking'];
@@ -230,14 +223,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     if (token == null) return;
 
     try {
-      final res = await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          headers: {'Authorization': 'Bearer $token'},
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-        ),
-      ).get('/cameras');
+      final res = await ApiClient.instance.dio.get(
+        '/cameras',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
 
       final cameras = (res.data as List)
           .map(
@@ -273,14 +262,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     }
     setState(() => _vehicleInfoLoading = true);
     try {
-      final res = await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          headers: {'Authorization': 'Bearer $token'},
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-        ),
-      ).get('/vehicles');
+      final res = await ApiClient.instance.dio.get(
+        '/vehicles',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       final vehicles = (res.data as List).cast<Map<String, dynamic>>();
       final vehicle = vehicles.firstWhere(
         (v) => v['id'] == widget.vehicleId,
@@ -402,16 +387,11 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
     setState(() => _locking = true);
     try {
-      final res =
-          await Dio(
-            BaseOptions(
-              baseUrl: _baseUrl,
-              headers: {"Authorization": "Bearer $token"},
-            ),
-          ).put(
-            "/vehicle/lock",
-            data: {"vehicle_id": widget.vehicleId, "locked": shouldLock},
-          );
+      final res = await ApiClient.instance.dio.put(
+        "/vehicle/lock",
+        data: {"vehicle_id": widget.vehicleId, "locked": shouldLock},
+        options: Options(headers: {"Authorization": "Bearer $token"}),
+      );
 
       if (!mounted) return;
       setState(() {

@@ -1,9 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import 'live_tracking_screen.dart';
-import 'login_screen.dart' show UserSession;
 import 'vehicle_profile_screen.dart';
 import 'profile_screen.dart';
 
@@ -15,8 +16,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
-
   final _storage = const FlutterSecureStorage();
 
   int _selectedIndex = 0;
@@ -53,14 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     try {
-      final res = await Dio(
-        BaseOptions(
-          baseUrl: _baseUrl,
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-          headers: {'Authorization': 'Bearer $token'},
-        ),
-      ).get('/vehicles');
+      final res = await ApiClient.instance.dio.get(
+        '/vehicles',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       final vehicles = (res.data as List).cast<Map<String, dynamic>>();
       setState(() {
         _vehicle = vehicles.isNotEmpty ? vehicles.first : null;

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../providers/firebase_messaging.dart';
 
@@ -111,20 +113,7 @@ class _LoginCardState extends State<_LoginCard> {
   bool _passwordVisible = false;
   bool _loading = false;
 
-  // ทดสอบบนมือถือจริงผ่าน 4G/5G หรือ WiFi ใดก็ได้ ผ่าน ngrok static domain (URL คงที่ ไม่เปลี่ยนเมื่อ restart)
-  static const _backendUrls = ['https://primp-squeeze-dedicator.ngrok-free.dev'];
-  //static const _backendUrls = ['http://localhost:8001']; // ใช้ตอนรันบน Windows desktop/emulator เดียวกับ backend
-
   final _storage = const FlutterSecureStorage();
-
-  Dio _makeDio(String baseUrl) => Dio(
-    BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 3),
-      receiveTimeout: const Duration(seconds: 5),
-      sendTimeout: const Duration(seconds: 5),
-    ),
-  );
 
   @override
   void dispose() {
@@ -326,32 +315,11 @@ class _LoginCardState extends State<_LoginCard> {
 
     setState(() => _loading = true);
     try {
-      Response? res;
-      String? workingUrl;
-      for (final url in _backendUrls) {
-        try {
-          res = await _makeDio(
-            url,
-          ).post('/auth/login', data: {'email': email, 'password': password});
-          workingUrl = url;
-          break; // success — stop trying
-        } on DioException catch (e) {
-          debugPrint("========== DIO ==========");
-          debugPrint("URL      : ${e.requestOptions.uri}");
-          debugPrint("TYPE     : ${e.type}");
-          debugPrint("MESSAGE  : ${e.message}");
-          debugPrint("STATUS   : ${e.response?.statusCode}");
-          debugPrint("BODY     : ${e.response?.data}");
-          debugPrint("=========================");
-          final isConnErr =
-              e.type == DioExceptionType.connectionError ||
-              e.type == DioExceptionType.connectionTimeout;
-          // If it's an auth error (401) the server IS reachable — surface it
-          if (!isConnErr || url == _backendUrls.last) rethrow;
-          // Otherwise try the next URL
-        }
-      }
-      final token = res!.data['access_token'] as String;
+      final res = await ApiClient.instance.dio.post(
+        '/auth/login',
+        data: {'email': email, 'password': password},
+      );
+      final token = res.data['access_token'] as String;
       final role = res.data['role'] as String? ?? 'user';
       // Store in secure storage — non-fatal if unavailable on this platform
       try {
@@ -360,7 +328,7 @@ class _LoginCardState extends State<_LoginCard> {
       UserSession.instance.token = token;
       UserSession.instance.role = role;
       // ผูก FCM token ของเครื่องนี้กับ user (fire-and-forget ไม่บล็อกการนำทาง)
-      registerFcmToken(workingUrl ?? _backendUrls.first, token);
+      registerFcmToken(token);
       if (!context.mounted) return;
       Navigator.pushReplacementNamed(
         context,
@@ -399,15 +367,6 @@ class _LoginCardState extends State<_LoginCard> {
       if (mounted) setState(() => _loading = false);
     }
   }
-}
-
-// Singleton เก็บ token และ user data ตลอด session
-class UserSession {
-  UserSession._();
-  static final UserSession instance = UserSession._();
-  String? token;
-  String? role;
-  Map<String, dynamic>? user;
 }
 
 // ignore: unused_element  // เก็บไว้เผื่อเปิดใช้ footer ภายหลัง (ดู _Footer() ที่ถูกคอมเมนต์ไว้ด้านบน)

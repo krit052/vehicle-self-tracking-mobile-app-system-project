@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import 'admin_camera_map_screen.dart';
-import 'login_screen.dart';
 
 class AdminCameraDetailScreen extends StatefulWidget {
   final AdminCameraData camera;
@@ -17,8 +18,6 @@ class AdminCameraDetailScreen extends StatefulWidget {
 }
 
 class _AdminCameraDetailScreenState extends State<AdminCameraDetailScreen> {
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
-
   final _storage = const FlutterSecureStorage();
 
   late final _nameController = TextEditingController(text: widget.camera.name);
@@ -84,14 +83,7 @@ class _AdminCameraDetailScreenState extends State<AdminCameraDetailScreen> {
     }
   }
 
-  Dio _dio(String token) => Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      headers: {'Authorization': 'Bearer $token'},
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  );
+  Dio _dio(String token) => ApiClient.instance.dio;
 
   Future<void> _save() async {
     final token = await _getToken();

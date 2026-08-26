@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 
+import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 
 class ForgotScreen extends StatefulWidget {
@@ -38,14 +39,7 @@ class _ForgotScreenState extends State<ForgotScreen> {
   bool _changingPassword = false;
   String? _resetToken;
 
-  final Dio dio = Dio(
-    BaseOptions(
-      baseUrl: "https://primp-squeeze-dedicator.ngrok-free.dev",
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 8),
-      sendTimeout: const Duration(seconds: 8),
-    ),
-  );
+  Dio get dio => ApiClient.instance.dio;
 
   void _resetVerificationState() {
     if (!_verified && !_otpVerified && _resetToken == null) return;
@@ -210,8 +204,8 @@ class _ForgotScreenState extends State<ForgotScreen> {
       return;
     }
 
-    if (_newPasswordController.text.length < 4) {
-      _showMessage("Password must be at least 4 characters");
+    if (_newPasswordController.text.length < 8) {
+      _showMessage("Password must be at least 8 characters");
       return;
     }
 

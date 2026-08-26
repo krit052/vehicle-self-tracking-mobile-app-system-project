@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:latlong2/latlong.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import 'admin_camera_detail_screen.dart';
-import 'login_screen.dart';
 
 // Notifies every open admin camera screen (Map/Camera tabs, detail screen)
 // to reload after a camera is created, edited, or deleted anywhere.
@@ -25,7 +26,6 @@ class AdminCameraMapScreen extends StatefulWidget {
 
 class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
   static const _mfuCenter = LatLng(20.0459, 99.8934);
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
 
   final _mapController = MapController();
   final _storage = const FlutterSecureStorage();
@@ -58,14 +58,7 @@ class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
     }
   }
 
-  Dio _dio(String token) => Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      headers: {'Authorization': 'Bearer $token'},
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  );
+  Dio _dio(String token) => ApiClient.instance.dio;
 
   Future<void> _loadCameras() async {
     setState(() {

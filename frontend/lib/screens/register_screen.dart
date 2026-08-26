@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
 
+import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -22,13 +23,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _hidePassword = true;
   bool _hideConfirm = true;
 
-  final Dio dio = Dio(
-    BaseOptions(
-      baseUrl: 'https://primp-squeeze-dedicator.ngrok-free.dev',
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  );
+  Dio get dio => ApiClient.instance.dio;
 
   @override
   void dispose() {
@@ -196,8 +191,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
               validator: (value) {
-                if (value == null || value.length < 4) {
-                  return "Minimum 4 characters";
+                if (value == null || value.length < 8) {
+                  return "Minimum 8 characters";
                 }
                 return null;
               },

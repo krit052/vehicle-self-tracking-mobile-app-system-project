@@ -1,10 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../services/api_client.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import 'admin_camera_detail_screen.dart';
 import 'admin_camera_map_screen.dart';
-import 'login_screen.dart';
 
 class AdminCameraListScreen extends StatefulWidget {
   const AdminCameraListScreen({super.key});
@@ -14,8 +15,6 @@ class AdminCameraListScreen extends StatefulWidget {
 }
 
 class _AdminCameraListScreenState extends State<AdminCameraListScreen> {
-  static const _baseUrl = 'https://primp-squeeze-dedicator.ngrok-free.dev';
-
   final _storage = const FlutterSecureStorage();
 
   List<AdminCameraData> _cameras = [];
@@ -44,14 +43,7 @@ class _AdminCameraListScreenState extends State<AdminCameraListScreen> {
     }
   }
 
-  Dio _dio(String token) => Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      headers: {'Authorization': 'Bearer $token'},
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  );
+  Dio _dio(String token) => ApiClient.instance.dio;
 
   Future<void> _loadCameras() async {
     setState(() {

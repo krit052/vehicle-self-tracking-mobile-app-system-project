@@ -3,6 +3,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 
+import '../services/api_client.dart';
+
 @pragma('vm:entry-point')
 Future<void> _onBackgroundMessage(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -11,20 +13,14 @@ Future<void> _onBackgroundMessage(RemoteMessage message) async {
 /// เรียกหลัง login สำเร็จ: init Firebase, ขอ FCM token ของเครื่อง
 /// แล้วส่งให้ backend ผูกกับ user (POST /me/device-token)
 /// ห่อ try/catch ทั้งหมด — ถ้า platform ไม่รองรับหรือ backend ล่ม แอปต้องไม่พัง
-Future<void> registerFcmToken(String baseUrl, String jwt) async {
+Future<void> registerFcmToken(String jwt) async {
   try {
     await Firebase.initializeApp();
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
     final token = await messaging.getToken();
     if (token == null || token.isEmpty) return;
-    await Dio(
-      BaseOptions(
-        baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 5),
-      ),
-    ).post(
+    await ApiClient.instance.dio.post(
       '/me/device-token',
       data: {'token': token},
       options: Options(headers: {'Authorization': 'Bearer $jwt'}),
@@ -39,18 +35,12 @@ Future<void> registerFcmToken(String baseUrl, String jwt) async {
 /// ไม่งั้นเครื่องนี้จะยังได้ push ของบัญชีเดิมต่อแม้ logout ไปแล้ว (ถ้ามีคนอื่น login
 /// เครื่องเดียวกันต่อ ทั้งสองบัญชีจะมี token เดียวกันผูกอยู่พร้อมกัน)
 /// ห่อ try/catch ทั้งหมด — ถอด token ไม่สำเร็จก็ต้อง logout ต่อได้ปกติ
-Future<void> unregisterFcmToken(String baseUrl, String jwt) async {
+Future<void> unregisterFcmToken(String jwt) async {
   try {
     await Firebase.initializeApp();
     final token = await FirebaseMessaging.instance.getToken();
     if (token == null || token.isEmpty) return;
-    await Dio(
-      BaseOptions(
-        baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 5),
-      ),
-    ).delete(
+    await ApiClient.instance.dio.delete(
       '/me/device-token',
       data: {'token': token},
       options: Options(headers: {'Authorization': 'Bearer $jwt'}),

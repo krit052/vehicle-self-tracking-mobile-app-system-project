@@ -15,7 +15,6 @@ dependencies:
 
   # Maps
   flutter_map: ^7.0.2
-  flutter_osm_plugin: ^1.4.5
   latlong2: ^0.9.1
 
   # Firebase
