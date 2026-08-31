@@ -134,12 +134,22 @@ DEPARTURE_CHECK_SECONDS = int(os.environ.get("DEPARTURE_CHECK_SECONDS", 30))
 # เพราะตัวนั้นคุมเรื่องกันแจ้งซ้ำของ PLATE_DETECTED ต่างหาก ไม่อยากให้กระทบกันตอนปรับค่านี้
 # ไวๆ เพื่อเทส — ค่าเริ่มต้น 60 วิ = 1 นาที สำหรับเทสระบบ)
 VEHICLE_LOST_SECONDS = int(os.environ.get("VEHICLE_LOST_SECONDS", 60))
-# แจ้ง "รถหาย" ซ้ำได้สูงสุดกี่ครั้งต่อการหายไปหนึ่งรอบ และห่างกันครั้งละกี่วิ (ค่าเริ่มต้น
-# 3 ครั้ง ห่างครั้งละ 1 นาที สำหรับเทสระบบ) — รีเซ็ตนับใหม่เองเมื่อกล้องเห็นรถอีกครั้ง
+# แจ้ง "รถหาย" เป็น 2 ช่วง กันไม่ให้เงียบไปตลอดกาลถ้ารถไม่กลับมาผ่านกล้องอีกเลย:
+#   ช่วงแรก (burst): แจ้งถี่ VEHICLE_LOST_ALERT_MAX ครั้ง ห่างครั้งละ VEHICLE_LOST_ALERT_INTERVAL_SECONDS
+#     (ค่าเริ่มต้น 3 ครั้ง ห่างครั้งละ 1 นาที) — สำหรับแจ้งด่วนตอนเพิ่งหาย
+#   ช่วงสอง (long-tail): พอครบ burst แล้วยังไม่กลับมา สลับไปแจ้งห่างขึ้นเป็น
+#     VEHICLE_LOST_ALERT_LONG_INTERVAL_SECONDS (ค่าเริ่มต้น 30 นาที) ต่ออีก
+#     VEHICLE_LOST_ALERT_LONG_MAX ครั้ง (ค่าเริ่มต้น 48 ครั้ง ~ ครอบคลุม 24 ชม.) กัน spam
+#     แจ้งไม่รู้จบถ้ารถหายจริงและไม่เจอกล้องไหนอีกเลย
+# ทั้งสองช่วงรีเซ็ตนับใหม่เองเมื่อกล้องเห็นรถอีกครั้ง (ดู /internal/plate-detected)
 VEHICLE_LOST_ALERT_MAX = int(os.environ.get("VEHICLE_LOST_ALERT_MAX", 3))
 VEHICLE_LOST_ALERT_INTERVAL_SECONDS = int(
     os.environ.get("VEHICLE_LOST_ALERT_INTERVAL_SECONDS", 60)
 )
+VEHICLE_LOST_ALERT_LONG_INTERVAL_SECONDS = int(
+    os.environ.get("VEHICLE_LOST_ALERT_LONG_INTERVAL_SECONDS", 1800)
+)
+VEHICLE_LOST_ALERT_LONG_MAX = int(os.environ.get("VEHICLE_LOST_ALERT_LONG_MAX", 48))
 OWNER_AWAY_DISTANCE_M = float(os.environ.get("OWNER_AWAY_DISTANCE_M", 5.0))
 OWNER_NEAR_DISTANCE_M = float(os.environ.get("OWNER_NEAR_DISTANCE_M", 5.0))
 OWNER_ACCURACY_MAX_M = float(os.environ.get("OWNER_ACCURACY_MAX_M", 10.0))
@@ -245,6 +255,15 @@ try:
     vehicles_col.create_index(
         [("locked", 1), ("last_detection", 1)], name="vehicles_locked_last_detection"
     )
+    # กันป้ายทะเบียนซ้ำข้ามบัญชี (จังหวัดเดียวกัน) — ไม่งั้นสองบัญชีกรอกป้ายชนกันจะได้
+    # PLATE_DETECTED/แจ้งเตือนของกันและกันหมด (ดู _ai_plate_matches ที่จับคู่ด้วยป้ายอย่างเดียว)
+    # ป้องกันซ้อนกับ check ระดับ endpoint ใน create_vehicle/update_vehicle (กัน race condition)
+    # ถ้ามีข้อมูลซ้ำเก่าอยู่แล้วจะสร้าง index ไม่สำเร็จ — ไป dedupe ข้อมูลก่อนแล้วรันใหม่
+    vehicles_col.create_index(
+        [("license_plate", 1), ("province", 1)],
+        unique=True,
+        name="vehicles_plate_province_unique",
+    )
     cameras_col.create_index("name", unique=True, name="cameras_name_unique")
     db["notifications"].create_index(
         [("user_id", 1), ("created_at", -1)], name="notifications_user_created"
@@ -309,7 +328,11 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 
 
 def require_internal_secret(x_internal_secret: str = Header(...)) -> None:
-    if x_internal_secret != INTERNAL_SECRET:
+    # ใช้ hmac.compare_digest แทน != ธรรมดา กัน timing attack (เดา secret ทีละตัวอักษรจาก
+    # เวลาตอบสนอง) — endpoint กลุ่ม /internal/* วิ่งอยู่บน tunnel เดียวกับ endpoint
+    # ผู้ใช้ทั่วไป (public) มี secret ตัวนี้เป็นเกราะป้องกันเดียว ต้องเทียบแบบ constant-time
+    # เหมือนจุดอื่นที่เทียบ secret ในไฟล์นี้ (ดู _hash_otp/_hash_reset_token ที่ทำถูกอยู่แล้ว)
+    if not hmac.compare_digest(x_internal_secret, INTERNAL_SECRET):
         raise HTTPException(status_code=403, detail="Invalid internal secret")
 
 def hash_password(password: str) -> str:
@@ -559,11 +582,11 @@ def _owner_status_is_near(vehicle: dict) -> bool:
 
 def _check_departed_locked_vehicles() -> None:
     """หา 'รถที่ล็อกอยู่แล้วหายไปจากกล้อง' → ยิงแจ้งเตือน LOST ('Vehicle lost!!!')
-    ซ้ำได้สูงสุด VEHICLE_LOST_ALERT_MAX ครั้งต่อการหายไปหนึ่งครั้ง ห่างกันครั้งละอย่างน้อย
-    VEHICLE_LOST_ALERT_INTERVAL_SECONDS วิ
+    เป็น 2 ช่วง (ดูคอมเมนต์ที่ VEHICLE_LOST_ALERT_MAX): burst ถี่ก่อน แล้วค่อยยืดเป็น
+    long-tail ห่างๆ ต่อ ไม่ใช่หยุดแจ้งไปเลยหลังครบ VEHICLE_LOST_ALERT_MAX ครั้งเหมือนเดิม
 
     เงื่อนไข: locked=True และเคยถูกกล้องเห็น (last_detection มี) แต่ไม่เห็นมานานเกิน
-    VEHICLE_LOST_SECONDS (= รถถูกเคลื่อนออกไปจากกล้อง) และยังแจ้งไม่ครบจำนวนครั้ง (นับด้วย
+    VEHICLE_LOST_SECONDS (= รถถูกเคลื่อนออกไปจากกล้อง) และยังแจ้งไม่ครบทั้งสองช่วง (นับด้วย
     last_detection.lost_alert_count/lost_alert_last_at — รีเซ็ตเองเมื่อกล้องเห็นรถอีกครั้ง
     เพราะ /internal/plate-detected เขียน last_detection ก้อนใหม่ทับ)"""
     now = datetime.now(timezone.utc)
@@ -580,14 +603,20 @@ def _check_departed_locked_vehicles() -> None:
             continue
 
         alert_count = int(ld.get("lost_alert_count", 0) or 0)
-        if alert_count >= VEHICLE_LOST_ALERT_MAX:
+        # เฟสแรก (burst) ถี่ก่อน พอครบแล้วสลับไปเฟสสอง (long-tail) ห่างขึ้น
+        # จนกว่าจะครบทั้งสองเฟส ถึงจะหยุดแจ้งจริง (กัน spam ไม่จบไม่สิ้นถ้ารถไม่กลับมาเลย)
+        if alert_count < VEHICLE_LOST_ALERT_MAX:
+            required_interval = VEHICLE_LOST_ALERT_INTERVAL_SECONDS
+        elif alert_count < VEHICLE_LOST_ALERT_MAX + VEHICLE_LOST_ALERT_LONG_MAX:
+            required_interval = VEHICLE_LOST_ALERT_LONG_INTERVAL_SECONDS
+        else:
             continue
 
         last_alert_at = ld.get("lost_alert_last_at")
         if last_alert_at is not None:
             if getattr(last_alert_at, "tzinfo", None) is not None:
                 last_alert_at = last_alert_at.astimezone(timezone.utc).replace(tzinfo=None)
-            if (now_naive - last_alert_at).total_seconds() < VEHICLE_LOST_ALERT_INTERVAL_SECONDS:
+            if (now_naive - last_alert_at).total_seconds() < required_interval:
                 continue
 
         if _owner_status_is_near(v):
@@ -620,7 +649,8 @@ def _check_departed_locked_vehicles() -> None:
                 "last_detection.lost_alert_last_at": now,
             }},
         )
-        print(f"[departure-watcher] LOST ({alert_count + 1}/{VEHICLE_LOST_ALERT_MAX}) "
+        total_max = VEHICLE_LOST_ALERT_MAX + VEHICLE_LOST_ALERT_LONG_MAX
+        print(f"[departure-watcher] LOST ({alert_count + 1}/{total_max}) "
               f"→ {v.get('license_plate','')} left {ld.get('camera_name','')}")
 
 
@@ -1481,11 +1511,22 @@ def get_vehicles(current_user: dict = Depends(get_current_user)):
 def create_vehicle(req: VehicleCreate, current_user: dict = Depends(get_current_user)):
     if vehicles_col.count_documents({"user_id": current_user["sub"]}) > 0:
         raise HTTPException(status_code=409, detail="You can only register 1 vehicle per account")
+
+    plate = req.license_plate.strip().upper()
+    province = req.province.strip()
+    # กันป้ายทะเบียน+จังหวัดซ้ำกับรถของบัญชีอื่น (ดู _ai_plate_matches — จับคู่แจ้งเตือน
+    # ด้วยป้ายอย่างเดียว ถ้าซ้ำกันจะได้แจ้งเตือน/ตำแหน่งรถของกันและกันไปเห็น)
+    if vehicles_col.find_one({"license_plate": plate, "province": province}):
+        raise HTTPException(
+            status_code=409,
+            detail="This license plate is already registered to another account",
+        )
+
     doc = {
         "user_id": current_user["sub"],
         "model": req.model.strip(),
-        "license_plate": req.license_plate.strip().upper(),
-        "province": req.province.strip(),
+        "license_plate": plate,
+        "province": province,
         "color": (req.color or "").strip(),
         "detection": 1,
         "geofence_radius_m": req.geofence_radius_m,
@@ -1505,6 +1546,15 @@ def update_vehicle(
 ):
     from bson import ObjectId
 
+    try:
+        object_id = ObjectId(vehicle_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid vehicle id")
+
+    existing = vehicles_col.find_one({"_id": object_id, "user_id": current_user["sub"]})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+
     update = {}
     if req.model is not None and req.model.strip():
         update["model"] = req.model.strip()
@@ -1519,13 +1569,26 @@ def update_vehicle(
     if not update:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
+    if "license_plate" in update or "province" in update:
+        # กันป้ายทะเบียน+จังหวัดซ้ำกับรถของบัญชีอื่น (เหมือน check ตอนสร้างรถ)
+        new_plate = update.get("license_plate", existing.get("license_plate", ""))
+        new_province = update.get("province", existing.get("province", ""))
+        conflict = vehicles_col.find_one(
+            {"_id": {"$ne": object_id}, "license_plate": new_plate, "province": new_province}
+        )
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail="This license plate is already registered to another account",
+            )
+
     result = vehicles_col.update_one(
-        {"_id": ObjectId(vehicle_id), "user_id": current_user["sub"]},
+        {"_id": object_id, "user_id": current_user["sub"]},
         {"$set": update},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Vehicle not found")
-    updated = vehicles_col.find_one({"_id": ObjectId(vehicle_id)})
+    updated = vehicles_col.find_one({"_id": object_id})
     return _vehicle_to_dict(updated)
 
 

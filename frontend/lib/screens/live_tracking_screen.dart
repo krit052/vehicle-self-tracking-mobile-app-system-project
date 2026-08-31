@@ -427,7 +427,15 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         ],
       ),
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 130),
+        // 130 ตั้งไว้ให้ลอยเหนือ handle ของ DraggableScrollableSheet พอดีตอนแนวตั้ง — แต่ค่า
+        // fixed เดิมทำให้ปุ่ม lock+GPS ล้นจอ (RenderFlex overflow) ตอนหมุนเป็นแนวนอน เพราะจอ
+        // สูงน้อยกว่ามากแต่ padding ยังกินพื้นที่เท่าเดิม ลดตอนแนวนอนให้เหลือพอดีตัว
+        padding: EdgeInsets.only(
+          bottom:
+              MediaQuery.of(context).orientation == Orientation.landscape
+              ? 16
+              : 130,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,

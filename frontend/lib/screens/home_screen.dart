@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/api_client.dart';
+import '../services/background_location_service.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import 'live_tracking_screen.dart';
@@ -62,6 +63,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _vehicleError = vehicles.isEmpty ? 'No vehicle registered yet.' : null;
         _loadingVehicle = false;
       });
+      // เริ่ม/ซิงก์ background location tracking ทุกครั้งที่ยืนยันแล้วว่ามีรถลงทะเบียนอยู่
+      // (เขียน token ทับของเดิมเสมอ เผื่อหมุนใหม่) — ไม่มีรถ = ไม่มีอะไรให้ track ต่อ ก็หยุดไป
+      final vehicleId = vehicles.isNotEmpty ? vehicles.first['id'] as String? : null;
+      if (vehicleId != null) {
+        BackgroundLocationService.instance.start(vehicleId: vehicleId, token: token);
+      } else {
+        BackgroundLocationService.instance.stop();
+      }
     } on DioException catch (e) {
       setState(() {
         _loadingVehicle = false;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_client.dart';
+import '../services/background_location_service.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/plate_format.dart';
@@ -260,6 +261,10 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
         _vehicles = [..._vehicles]..removeAt(index);
         _expandedIndex = null;
       });
+      // ไม่มีรถเหลือให้ track แล้ว — หยุด background location tracking ไปด้วย
+      if (_vehicles.isEmpty) {
+        BackgroundLocationService.instance.stop();
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Vehicle removed'),

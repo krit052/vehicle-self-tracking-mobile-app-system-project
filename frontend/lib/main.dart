@@ -7,15 +7,20 @@ import 'screens/home_screen.dart';
 import 'screens/admin_home_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/api_client.dart';
+import 'services/background_location_service.dart';
 import 'theme/app_theme.dart';
 
 /// Navigator ระดับแอป — ให้ ApiClient เด้งไปหน้า login เองได้ตอน token หมดอายุ (401)
 /// โดยไม่ต้องมี BuildContext ของหน้าที่กำลังยิง request อยู่ตอนนั้น
 final navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   ApiClient.instance.navigatorKey = navigatorKey;
+  // ผูก handler ของ background location service ไว้ตั้งแต่ app start (ยังไม่เริ่มขอ
+  // location จริงจนกว่า HomeScreen จะเรียก start() ตอนยืนยันว่า login + มีรถแล้ว)
+  await BackgroundLocationService.instance.configure();
   runApp(const MfuTrackerApp());
 }
 

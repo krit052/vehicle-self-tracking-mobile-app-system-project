@@ -6,6 +6,13 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- ตามตำแหน่งเจ้าของต่อในพื้นหลังแม้ปิดแอป/สลับแอปไปแล้ว (ดู
+         lib/services/background_location_service.dart) รันเป็น foreground service ที่มี
+         notification ค้างตลอดตอน tracking อยู่ — ต้องประกาศ permission เหล่านี้ให้ครบตาม
+         Android 14+ (API 34) ไม่งั้น foreground service type="location" จะ start ไม่ได้ -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <application
         android:label="frontend"
         android:name="${applicationName}"
@@ -44,6 +51,16 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="high_importance_channel" />
+        <!-- flutter_background_service ประกาศ <service> นี้เองใน manifest ของปลั๊กอิน แต่ไม่ใส่
+             foregroundServiceType ไว้ (ค่า default = ไม่มี) ส่วนโค้ดเราสั่ง startForeground ด้วย
+             type "location" ตอนรันจริง (ดู AndroidForegroundType.location ใน
+             background_location_service.dart) — บน Android 14+ (API 34) สอง อย่างนี้ต้องตรงกัน
+             ไม่งั้น crash ทันทีตอน service พยายาม start (IllegalArgumentException: foregroundServiceType
+             ... is not a subset of ... attribute ... in service element of manifest file) ต้อง
+             override ให้ตรงกันตรงนี้ (merge ทับค่าจากปลั๊กอินด้วยชื่อ service เดียวกัน) -->
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="location" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

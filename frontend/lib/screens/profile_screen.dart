@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../providers/firebase_messaging.dart' show unregisterFcmToken;
 import '../services/api_client.dart';
+import '../services/background_location_service.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/notification_bell.dart';
@@ -142,6 +143,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (token != null) {
       await unregisterFcmToken(token);
     }
+    // หยุด background location tracking ด้วย — ไม่งั้นเครื่องนี้จะยังส่ง GPS เข้าบัญชีเดิม
+    // ต่อแม้ logout ไปแล้ว (background service ไม่รู้เรื่อง logout เอง ต้องสั่งหยุดตรงนี้)
+    await BackgroundLocationService.instance.stop();
 
     try {
       await _storage.delete(key: 'jwt_token');
