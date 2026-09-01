@@ -178,16 +178,23 @@ except Exception as e:
     print(f"❌ MongoDB connection failed: {e}")
 
 # ── Firebase Cloud Messaging (push) ───────────────────────────────────────────
-# Path มาจาก env var เสมอ (เหมือน ai_worker) กันไม่ให้ต้องแก้โค้ดทุกครั้งที่หมุน/เปลี่ยนชื่อไฟล์คีย์
+# FIREBASE_SERVICE_ACCOUNT มาจาก env var เสมอ กันไม่ให้ต้องแก้โค้ดทุกครั้งที่หมุน/เปลี่ยนชื่อไฟล์คีย์
+# รับได้ 2 แบบ: (1) เนื้อไฟล์ JSON ทั้งก้อน — ใช้บน cloud (เช่น Railway) ที่ไม่มีไฟล์ key
+# ติดไปกับ deploy ด้วย (2) พาธไฟล์ในเครื่อง — ใช้ตอน dev ท้องถิ่น
 # fallback เป็น path เดิมไว้เผื่อ .env ยังไม่ได้ตั้งค่า (ไม่ทำให้ deploy เดิมพัง)
-_FIREBASE_KEY = Path(
-    os.environ.get("FIREBASE_SERVICE_ACCOUNT")
-    or (Path(__file__).parent.parent / "db_config" / "firebase-adminsdk-key-fbsvc-a8c8f167bd.json")
-)
+_firebase_service_account = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+if _firebase_service_account and _firebase_service_account.strip().startswith("{"):
+    _firebase_cred = credentials.Certificate(json.loads(_firebase_service_account))
+else:
+    _FIREBASE_KEY = Path(
+        _firebase_service_account
+        or (Path(__file__).parent.parent / "db_config" / "firebase-adminsdk-key-fbsvc-a8c8f167bd.json")
+    )
+    _firebase_cred = credentials.Certificate(str(_FIREBASE_KEY))
 _fcm_ready = False
 try:
     if not firebase_admin._apps:
-        firebase_admin.initialize_app(credentials.Certificate(str(_FIREBASE_KEY)))
+        firebase_admin.initialize_app(_firebase_cred)
     _fcm_ready = True
     print("✅ Firebase Messaging initialized")
 except Exception as e:

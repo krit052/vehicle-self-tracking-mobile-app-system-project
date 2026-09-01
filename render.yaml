@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: vehicle-tracking-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: MONGO_NAME
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: INTERNAL_SECRET
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
