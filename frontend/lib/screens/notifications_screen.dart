@@ -1099,6 +1099,7 @@ class _AlertCard extends StatelessWidget {
   }
 
   Color _typeColor(String type) => switch (type) {
+    'MOVED' => const Color(0xFFE65100),
     'LOST' => AppColors.error,
     'PLATE_DETECTED' => AppColors.purple,
     'AUTO_LOCKED' => AppColors.green,
@@ -1107,6 +1108,7 @@ class _AlertCard extends StatelessWidget {
   };
 
   String _typeTitle(String type) => switch (type) {
+    'MOVED' => 'Vehicle Moved',
     'LOST' => 'Vehicle lost!!!',
     'PLATE_DETECTED' => 'License Plate Detected',
     'AUTO_LOCKED' => 'Vehicle Auto-Locked',
@@ -1115,6 +1117,8 @@ class _AlertCard extends StatelessWidget {
   };
 
   String _bodyText(String type) => switch (type) {
+    'MOVED' =>
+      'Your vehicle was seen at a different camera while locked — you never unlocked it.',
     'LOST' =>
       'Your vehicle left its zone without being unlocked.',
     'PLATE_DETECTED' =>
@@ -1143,6 +1147,11 @@ class _AlertIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, bg, fg) = switch (type) {
+      'MOVED' => (
+        Icons.warning_amber_rounded,
+        const Color(0xFFFFF3E0),
+        const Color(0xFFE65100),
+      ),
       'LOST' => (
         Icons.no_encryption_gmailerrorred_outlined,
         const Color(0xFFFFEDED),

@@ -2057,6 +2057,18 @@ def report_plate_detected(
         already_notified = same_session and bool(prev.get("notified"))
         should_notify = not already_notified
 
+        # รถ "ล็อคอยู่" แต่ไปโผล่คนละกล้องกับที่เห็นครั้งก่อน = ถูกเคลื่อนย้ายทั้งที่เจ้าของ
+        # ไม่เคยปลดล็อคเลย (unlock จริงจะเคลียร์ last_detection ทิ้งแล้ว — ดู /vehicle/lock
+        # และ update_owner_location) ถือเป็นสัญญาณย้ายตำแหน่งที่ผิดปกติ → แจ้ง MOVED
+        prev_camera = (prev.get("camera_name") or "").strip()
+        new_camera = (event.camera_name or "").strip()
+        moved_while_locked = (
+            bool(vehicle.get("locked", False))
+            and prev_camera != ""
+            and new_camera != ""
+            and prev_camera != new_camera
+        )
+
         # อัปเดตตำแหน่ง + at + flag notified "เสมอ" → หมุดค้าง/ขยับตามกล้องที่เห็นล่าสุด
         # และจำได้ว่าแจ้งไปแล้วในรอบนี้ (เขียนก้อนใหม่ทับ → lost_alert_count ของ watcher หายเอง)
         vehicles_col.update_one(
@@ -2071,12 +2083,32 @@ def report_plate_detected(
         )
         refreshed += 1
 
+        if moved_while_locked:
+            db["notifications"].insert_one({
+                "user_id": vehicle["user_id"],
+                "alert_type": "MOVED",
+                "snapshot_url": event.snapshot_url or "",
+                "license_plate": plate,
+                "camera_name": new_camera,
+                "created_at": now,
+                "read": False,
+            })
+            _push_to_user(
+                vehicle["user_id"],
+                "Vehicle Moved",
+                f"{plate} was seen at {new_camera} while locked — you never "
+                f"unlocked it (last seen at {prev_camera}).",
+                data={"alert_type": "MOVED", "license_plate": plate,
+                      "camera_name": new_camera},
+            )
+            notified += 1
+
         if not should_notify:
             continue
 
         # การตรวจเจอป้าย = "รถถูกตรวจจับ" เสมอ (ไม่ใช่การเคลื่อนย้าย) → PLATE_DETECTED
         # แม้รถจะอยู่สถานะ locked ก็ตาม — ส่วนแจ้งเตือน "เคลื่อนย้ายโดยไม่ได้รับอนุญาต"
-        # (LOST) อยู่ที่ background departure watcher / geofence แยกต่างหาก
+        # (MOVED/LOST) อยู่ที่ด้านบนกับ background departure watcher แยกต่างหาก
         alert_type = "PLATE_DETECTED"
         db["notifications"].insert_one({
             "user_id": vehicle["user_id"],
