@@ -131,9 +131,11 @@ DETECTION_PRESENCE_SECONDS = int(os.environ.get("DETECTION_PRESENCE_SECONDS", 90
 DEPARTURE_CHECK_SECONDS = int(os.environ.get("DEPARTURE_CHECK_SECONDS", 30))
 # กล้องไม่เห็นรถ locked นานเกินกี่วิ ถึงจะถือว่า "หาย" → หมุดรถบนแผนที่หายไปด้วย (ดู
 # _last_detection_public) และเริ่มยิง LOST (แยกจาก DETECTION_PRESENCE_SECONDS
-# เพราะตัวนั้นคุมเรื่องกันแจ้งซ้ำของ PLATE_DETECTED ต่างหาก ไม่อยากให้กระทบกันตอนปรับค่านี้
-# ไวๆ เพื่อเทส — ค่าเริ่มต้น 60 วิ = 1 นาที สำหรับเทสระบบ)
-VEHICLE_LOST_SECONDS = int(os.environ.get("VEHICLE_LOST_SECONDS", 60))
+# เพราะตัวนั้นคุมเรื่องกันแจ้งซ้ำของ PLATE_DETECTED ต่างหาก ไม่อยากให้กระทบกันตอนปรับค่านี้)
+# ค่าเริ่มต้น = DETECTION_PRESENCE_SECONDS เอง (ไม่ตั้งสั้นกว่านั้น) เพราะ OCR อ่านป้ายเป็น
+# ช่วง ๆ ไม่ต่อเนื่อง — ถ้าตั้งสั้นกว่าช่วงห่างที่ OCR อ่านได้จริง จะเจอ false LOST alert
+# (แจ้ง "Vehicle lost!!!" ทั้งที่รถยังจอดอยู่ตรงกล้องเดิม แค่ยังไม่ถึงรอบที่ OCR อ่านซ้ำ)
+VEHICLE_LOST_SECONDS = int(os.environ.get("VEHICLE_LOST_SECONDS", DETECTION_PRESENCE_SECONDS))
 # แจ้ง "รถหาย" เป็น 2 ช่วง กันไม่ให้เงียบไปตลอดกาลถ้ารถไม่กลับมาผ่านกล้องอีกเลย:
 #   ช่วงแรก (burst): แจ้งถี่ VEHICLE_LOST_ALERT_MAX ครั้ง ห่างครั้งละ VEHICLE_LOST_ALERT_INTERVAL_SECONDS
 #     (ค่าเริ่มต้น 3 ครั้ง ห่างครั้งละ 1 นาที) — สำหรับแจ้งด่วนตอนเพิ่งหาย
@@ -318,7 +320,21 @@ def decode_token(token: str) -> dict:
 
 
 def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    return decode_token(creds.credentials)
+    payload = decode_token(creds.credentials)
+    # เช็คกับ DB สดทุก request แทนการเชื่อ role/name/email ที่ bake ไว้ใน token ตอน login
+    # เฉยๆ — กัน token เก่ายังใช้ได้ทั้งที่ user ถูกลบไปแล้ว (DELETE /auth/user/{id}) หรือ
+    # role ถูกเปลี่ยน (เช่น ถอดสิทธิ์ admin) แล้วแต่ยังไม่หมดอายุ (สูงสุด JWT_EXPIRE_HOURS
+    # ชม.) — ไม่ต้องทำ token blacklist แยกต่างหาก เพราะ query เดียวจบ
+    try:
+        user = users_col.find_one({"_id": ObjectId(payload["sub"])})
+    except (InvalidId, KeyError):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    payload["role"] = user.get("role", "user")
+    payload["name"] = user.get("name", "")
+    payload["email"] = user.get("email", "")
+    return payload
 
 
 def require_admin(current_user: dict = Depends(get_current_user)) -> dict:

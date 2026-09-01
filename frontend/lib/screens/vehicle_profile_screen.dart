@@ -63,7 +63,6 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
   final _storage = const FlutterSecureStorage();
 
   List<Map<String, dynamic>> _vehicles = [];
-  int? _expandedIndex;
   String? _userName;
   bool _loading = true;
   String? _error;
@@ -241,7 +240,6 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
         token: token,
         onCreated: (created) => setState(() {
           _vehicles = [..._vehicles, created];
-          _expandedIndex = _vehicles.length - 1;
         }),
       ),
     );
@@ -259,7 +257,6 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
       if (!mounted) return;
       setState(() {
         _vehicles = [..._vehicles]..removeAt(index);
-        _expandedIndex = null;
       });
       // ไม่มีรถเหลือให้ track แล้ว — หยุด background location tracking ไปด้วย
       if (_vehicles.isEmpty) {
@@ -330,33 +327,21 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
             key: ValueKey(e.value['id']),
             data: e.value,
             index: e.key,
-            isExpanded: _expandedIndex == e.key,
-            onToggle: () => setState(() {
-              _expandedIndex = _expandedIndex == e.key ? null : e.key;
-            }),
             onSaved: (updated) => setState(() => _vehicles[e.key] = updated),
             onDelete: () => _deleteVehicle(e.key),
           ),
         ),
-        const SizedBox(height: 8),
-        if (_vehicles.isNotEmpty)
-          _DetectionThresholdCard(
-            vehicleId: _vehicles.first["id"],
-            detection: _vehicles.first["detection"] ?? 1,
-          ), // ถ้าในอนาคต 1 User มีหลาย Vehicle ควรให้ Detection Card อยู่ในแต่ละ _VehicleCard ไม่ใช่มี Detection Card เดียวอยู่ล่างสุด
         const SizedBox(height: 32),
       ],
     );
   }
 }
 
-// ── Vehicle Card (expandable) ─────────────────────────────────────────────────
+// ── Vehicle Card ───────────────────────────────────────────────────────────────
 
 class _VehicleCard extends StatefulWidget {
   final Map<String, dynamic> data;
   final int index;
-  final bool isExpanded;
-  final VoidCallback onToggle;
   final ValueChanged<Map<String, dynamic>> onSaved;
   final VoidCallback onDelete;
 
@@ -364,8 +349,6 @@ class _VehicleCard extends StatefulWidget {
     super.key,
     required this.data,
     required this.index,
-    required this.isExpanded,
-    required this.onToggle,
     required this.onSaved,
     required this.onDelete,
   });
@@ -613,85 +596,64 @@ class _VehicleCardState extends State<_VehicleCard> {
       ),
       child: Column(
         children: [
-          InkWell(
-            onTap: widget.onToggle,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.motorcycle,
+                    color: AppColors.onPrimaryContainer,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.onSurface,
+                    ),
+                  ),
+                ),
+                if (_dirty)
                   Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.motorcycle,
-                      color: AppColors.onPrimaryContainer,
-                      size: 20,
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.secondary,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.onSurface,
-                      ),
-                    ),
-                  ),
-                  if (_dirty)
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.secondary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  IconButton(
-                    onPressed: widget.onToggle,
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    color: AppColors.primary,
-                    tooltip: 'Edit',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    widget.isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: AppColors.onSurfaceVariant,
-                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(color: AppColors.outlineVariant, height: 1),
+                  const SizedBox(height: 16),
+                  _buildImagesSection(),
+                  const SizedBox(height: 20),
+                  _buildIdentificationSection(),
+                  const SizedBox(height: 20),
+                  _buildActionButtons(),
                 ],
               ),
             ),
           ),
-          if (widget.isExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Divider(color: AppColors.outlineVariant, height: 1),
-                    const SizedBox(height: 16),
-                    _buildImagesSection(),
-                    const SizedBox(height: 20),
-                    _buildIdentificationSection(),
-                    const SizedBox(height: 20),
-                    _buildActionButtons(),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -844,139 +806,6 @@ class _VehicleCardState extends State<_VehicleCard> {
           style: TextButton.styleFrom(foregroundColor: AppColors.error),
         ),
       ],
-    );
-  }
-}
-
-// ── Detection Threshold Card ──────────────────────────────────────────────────
-
-class _DetectionThresholdCard extends StatefulWidget {
-  final String vehicleId;
-  final int detection;
-
-  const _DetectionThresholdCard({
-    required this.vehicleId,
-    required this.detection,
-  });
-
-  @override
-  State<_DetectionThresholdCard> createState() =>
-      _DetectionThresholdCardState();
-}
-
-class _DetectionThresholdCardState extends State<_DetectionThresholdCard> {
-  int _selectedDelay = 1;
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedDelay = widget.detection; //_selectedDelay = widget.detection ?? 2;
-  }
-
-  Future<void> _save() async {
-    final token = UserSession.instance.token;
-
-    if (token == null) return;
-
-    try {
-      await ApiClient.instance.dio.put(
-        "/vehicle/detection",
-        data: {"vehicle_id": widget.vehicleId, "detection": _selectedDelay},
-        options: Options(headers: {"Authorization": "Bearer $token"}),
-      );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Detection threshold updated"),
-          backgroundColor: AppColors.green,
-        ),
-      );
-    } on DioException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.response?.data["detail"] ?? "Unable to save"),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: const Border(
-          left: BorderSide(color: AppColors.secondaryContainer, width: 4),
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _FieldHeader(
-            icon: Icons.videocam_outlined,
-            title: 'Detection Threshold',
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Set the delay before the campus CCTV network begins actively tracking this vehicle after leaving a designated parking zone. Minimum threshold is 1 minute.',
-            style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  initialValue: _selectedDelay,
-                  decoration: const InputDecoration(
-                    labelText: 'Delay Time',
-                    prefixIcon: Icon(Icons.timer_outlined),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('1 Minute')),
-                    DropdownMenuItem(value: 2, child: Text('2 Minutes')),
-                    DropdownMenuItem(value: 3, child: Text('3 Minutes')),
-                    DropdownMenuItem(value: 4, child: Text('4 Minutes')),
-                    DropdownMenuItem(value: 5, child: Text('5 Minutes')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _selectedDelay = value;
-                      });
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(72, 56),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                ),
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
