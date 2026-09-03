@@ -76,6 +76,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       final user = Map<String, dynamic>.from(res.data);
       UserSession.instance.user = user;
+      if (!mounted) return;
       setState(() {
         _user = user;
       });
@@ -107,8 +108,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       final updated = Map<String, dynamic>.from(res.data);
       UserSession.instance.user = updated;
-      setState(() => _user = updated);
-      _showSnack('Profile updated');
+      if (mounted) {
+        setState(() => _user = updated);
+        _showSnack('Profile updated');
+      }
       return null;
     } on DioException catch (e) {
       // 409 = อีเมลนี้ถูกใช้กับบัญชีอื่นแล้ว (backend เช็คใน update_profile)

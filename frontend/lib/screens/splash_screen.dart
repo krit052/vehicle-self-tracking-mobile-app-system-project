@@ -63,11 +63,11 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
     if (!serviceEnabled) {
       if (!mounted) return false;
       await _showLocationDialog(
-        title: 'เปิดใช้งานตำแหน่ง (Location)',
+        title: 'Turn on Location',
         message:
-            'แอปนี้ต้องใช้ตำแหน่งของคุณเพื่อติดตามและล็อก/ปลดล็อกรถอัตโนมัติ '
-            'กรุณาเปิดบริการตำแหน่ง (Location Services) ก่อนใช้งานแอป',
-        actionLabel: 'เปิดตำแหน่ง',
+            'This app needs your location to track and automatically lock/unlock '
+            'your vehicle. Please enable Location Services before using the app.',
+        actionLabel: 'Turn on Location',
         onAction: () async {
           _waitingForLocationSettings = true;
           await Geolocator.openLocationSettings();
@@ -83,23 +83,26 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
 
     if (permission == LocationPermission.denied) {
       if (!mounted) return false;
+      // ไม่เรียก _ensureLocationPermission() ซ้ำตรงนี้ — ปุ่มของ dialog เอง
+      // (ดู _showLocationDialog) เรียก _ensureLocationThenCheckSession() ให้อยู่แล้ว
+      // หลัง onAction() เสร็จ ถ้าเรียกซ้ำสองทางจะยิง /auth/me + register FCM ซ้ำ
       await _showLocationDialog(
-        title: 'ต้องการสิทธิ์เข้าถึงตำแหน่ง',
-        message: 'กรุณาอนุญาตให้แอปเข้าถึงตำแหน่งของคุณเพื่อใช้งานต่อ',
-        actionLabel: 'ลองอีกครั้ง',
+        title: 'Location Permission Required',
+        message: 'Please allow the app to access your location to continue.',
+        actionLabel: 'Try Again',
         onAction: () async {},
       );
-      return _ensureLocationPermission();
+      return false;
     }
 
     if (permission == LocationPermission.deniedForever) {
       if (!mounted) return false;
       await _showLocationDialog(
-        title: 'สิทธิ์เข้าถึงตำแหน่งถูกปิดถาวร',
+        title: 'Location Permission Permanently Denied',
         message:
-            'กรุณาไปที่ตั้งค่าแอปแล้วเปิดสิทธิ์เข้าถึงตำแหน่ง (Location) '
-            'เพื่อใช้งานแอปนี้ต่อ',
-        actionLabel: 'เปิดตั้งค่าแอป',
+            'Please go to the app settings and enable location access '
+            'to continue using this app.',
+        actionLabel: 'Open App Settings',
         onAction: () async {
           _waitingForLocationSettings = true;
           await Geolocator.openAppSettings();

@@ -107,6 +107,7 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
       _error = null;
     });
     final token = await _getToken();
+    if (!mounted) return;
     if (token == null) {
       setState(() {
         _loading = false;
@@ -119,11 +120,13 @@ class _VehicleProfileScreenState extends State<VehicleProfileScreen> {
         '/vehicles',
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
+      if (!mounted) return;
       setState(() {
         _vehicles = (res.data as List).cast<Map<String, dynamic>>();
         _loading = false;
       });
     } on DioException catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error =

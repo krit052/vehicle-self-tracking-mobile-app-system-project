@@ -160,7 +160,6 @@ def send_fcm_alert(cam: "CameraContext", payload: dict):
     if now - cam.last_alert_sent_at < ALERT_COOLDOWN_SECONDS:
         print(f"[Alert][{cam.name}] Cooldown active, skipping duplicate")
         return
-    cam.last_alert_sent_at = now
 
     plate_text = stringify(payload.get("license_plate_text", "-"))
     distance = payload.get("distance_m", "unknown")
@@ -190,6 +189,9 @@ def send_fcm_alert(cam: "CameraContext", payload: dict):
                 "sent_at": datetime.now(timezone.utc),
             })
             print(f"[Mongo][{cam.name}] Notification saved")
+        # ผูก cooldown กับความสำเร็จของการบันทึกแจ้งเตือน ไม่ใช่แค่ผ่านการเช็ค cooldown เฉยๆ
+        # ถ้า insert ล้มเหลว (Mongo ล่มชั่วคราว ฯลฯ) ต้องไม่เสีย alert ทั้ง cooldown window ไปฟรีๆ
+        cam.last_alert_sent_at = now
     except Exception as e:
         print("[Mongo] Failed to save notification:", repr(e))
 
@@ -220,23 +222,31 @@ def send_fcm_alert(cam: "CameraContext", payload: dict):
     except Exception as e:
         print(f"[FCM][{cam.name}] Error sending message:", repr(e))
 
+def _post_plate_detected(cam_name: str, plate: str):
+    try:
+        requests.post(
+            f"{BACKEND_URL}/internal/plate-detected",
+            headers={"X-Internal-Secret": INTERNAL_SECRET},
+            json={"license_plate": plate, "camera_name": cam_name},
+            timeout=5,
+        )
+    except Exception as e:
+        print(f"[Backend][{cam_name}] report plate '{plate}' failed: {e!r}")
+
 def report_plate_detected(cam: "CameraContext", plate_text: str):
     """แจ้ง backend ว่ากล้องตัวนี้อ่านป้ายนี้ได้ → backend จะจับคู่เจ้าของ,
     ปักหมุดตำแหน่งรถ (พิกัดกล้อง) และแจ้งเตือน 'รถถูกตรวจจับ' ให้เจ้าของ
     เรียกได้ทุกเฟรมที่อ่านป้ายได้ — backend กันแจ้งซ้ำ/รีเฟรชตำแหน่งให้เอง
-    (แยกหลายป้ายที่คั่นด้วย ' | ' แล้วส่งทีละใบ)"""
+    (แยกหลายป้ายที่คั่นด้วย ' | ' แล้วส่งทีละใบ)
+    ยิงแต่ละ request บน thread แยก (fire-and-forget) — เรียกจาก cam.cloud_thread ซึ่ง
+    sampling loop ของกล้องตัวนี้รอให้จบก่อนถึงจะ schedule เฟรมถัดไป ถ้า backend ช้า/ไม่ตอบ
+    การ block รอ requests.post ตรงนี้จะไปยืดรอบ sampling ของกล้องออกไปด้วย"""
     if not BACKEND_URL or not INTERNAL_SECRET:
         return
     for one in [p.strip() for p in (plate_text or "").split("|") if p.strip()]:
-        try:
-            requests.post(
-                f"{BACKEND_URL}/internal/plate-detected",
-                headers={"X-Internal-Secret": INTERNAL_SECRET},
-                json={"license_plate": one, "camera_name": cam.name},
-                timeout=5,
-            )
-        except Exception as e:
-            print(f"[Backend][{cam.name}] report plate '{one}' failed: {e!r}")
+        threading.Thread(
+            target=_post_plate_detected, args=(cam.name, one), daemon=True
+        ).start()
 
 
 def normalize_result(result):

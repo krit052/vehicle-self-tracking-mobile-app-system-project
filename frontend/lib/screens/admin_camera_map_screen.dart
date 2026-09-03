@@ -265,7 +265,12 @@ class _AdminCameraMapScreenState extends State<AdminCameraMapScreen> {
                     _addCameraAt(point);
                   }
                 },
-                onLongPress: (_, point) => _addCameraAt(point),
+                onLongPress: (_, point) {
+                  if (_placingCamera) {
+                    setState(() => _placingCamera = false);
+                    _addCameraAt(point);
+                  }
+                },
               ),
               children: [
                 TileLayer(

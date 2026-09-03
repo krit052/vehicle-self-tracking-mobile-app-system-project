@@ -6,6 +6,7 @@ import 'screens/forgot_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_home_screen.dart';
 import 'screens/splash_screen.dart';
+import 'providers/firebase_messaging.dart';
 import 'services/api_client.dart';
 import 'services/background_location_service.dart';
 import 'theme/app_theme.dart';
@@ -14,6 +15,11 @@ import 'theme/app_theme.dart';
 /// โดยไม่ต้องมี BuildContext ของหน้าที่กำลังยิง request อยู่ตอนนั้น
 final navigatorKey = GlobalKey<NavigatorState>();
 
+/// ผูก onMessage/onBackgroundMessage listener ไว้ตั้งแต่ app start เพื่อให้แอปที่เปิด
+/// อยู่ (foreground) รับ push ได้จริง — ก่อนหน้านี้ provider นี้ถูกสร้างไว้แต่ไม่เคยมีใคร
+/// เรียก init() เลย ทำให้ onMessage listener ไม่เคยถูกลงทะเบียน
+final firebaseMessagingProvider = FirebaseMessagingProvider();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
@@ -21,6 +27,7 @@ Future<void> main() async {
   // ผูก handler ของ background location service ไว้ตั้งแต่ app start (ยังไม่เริ่มขอ
   // location จริงจนกว่า HomeScreen จะเรียก start() ตอนยืนยันว่า login + มีรถแล้ว)
   await BackgroundLocationService.instance.configure();
+  await firebaseMessagingProvider.init();
   runApp(const MfuTrackerApp());
 }
 

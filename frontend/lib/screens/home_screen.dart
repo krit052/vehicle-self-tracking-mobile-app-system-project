@@ -45,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _vehicleError = null;
     });
     final token = await _getToken();
+    if (!mounted) return;
     if (token == null) {
       setState(() {
         _loadingVehicle = false;
@@ -58,11 +59,6 @@ class _HomeScreenState extends State<HomeScreen> {
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
       final vehicles = (res.data as List).cast<Map<String, dynamic>>();
-      setState(() {
-        _vehicle = vehicles.isNotEmpty ? vehicles.first : null;
-        _vehicleError = vehicles.isEmpty ? 'No vehicle registered yet.' : null;
-        _loadingVehicle = false;
-      });
       // เริ่ม/ซิงก์ background location tracking ทุกครั้งที่ยืนยันแล้วว่ามีรถลงทะเบียนอยู่
       // (เขียน token ทับของเดิมเสมอ เผื่อหมุนใหม่) — ไม่มีรถ = ไม่มีอะไรให้ track ต่อ ก็หยุดไป
       final vehicleId = vehicles.isNotEmpty ? vehicles.first['id'] as String? : null;
@@ -71,7 +67,14 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         BackgroundLocationService.instance.stop();
       }
+      if (!mounted) return;
+      setState(() {
+        _vehicle = vehicles.isNotEmpty ? vehicles.first : null;
+        _vehicleError = vehicles.isEmpty ? 'No vehicle registered yet.' : null;
+        _loadingVehicle = false;
+      });
     } on DioException catch (e) {
+      if (!mounted) return;
       setState(() {
         _loadingVehicle = false;
         _vehicleError =

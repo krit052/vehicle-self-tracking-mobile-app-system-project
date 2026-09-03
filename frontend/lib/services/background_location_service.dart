@@ -150,6 +150,15 @@ void _onStart(ServiceInstance service) async {
         },
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+        // token หมดอายุ/ถูกเพิกถอน — เขียนซ้ำไปเรื่อยๆ ก็ไม่มีทางสำเร็จ หยุด service ทิ้ง
+        // key ไว้ ให้ user เปิดแอปแล้ว login ใหม่ค่อยเริ่ม start() ให้เองอีกที
+        await storage.delete(key: _kBgVehicleIdKey);
+        await storage.delete(key: _kBgTokenKey);
+        await stopAndCleanUp();
+      }
+      // error อื่น (network ล่ม ฯลฯ) เงียบไว้ — ping รอบถัดไปจาก stream จะลองใหม่เอง
     } catch (_) {
       // เงียบไว้ — ping รอบถัดไปจาก stream จะลองใหม่เอง ไม่ควรทำให้ service ทั้งตัวล้ม
     }

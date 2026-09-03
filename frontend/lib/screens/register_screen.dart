@@ -269,8 +269,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   } on DioException catch (e) {
                     String message = "Register failed";
 
-                    if (e.response != null) {
-                      message = e.response!.data["detail"];
+                    final data = e.response?.data;
+                    if (data is Map && data["detail"] != null) {
+                      message = data["detail"].toString();
                     }
 
                     if (!mounted) return;

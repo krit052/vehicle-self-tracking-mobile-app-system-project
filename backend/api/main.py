@@ -219,17 +219,17 @@ except Exception as e:
 # รับได้ 2 แบบ: (1) เนื้อไฟล์ JSON ทั้งก้อน — ใช้บน cloud (เช่น Railway) ที่ไม่มีไฟล์ key
 # ติดไปกับ deploy ด้วย (2) พาธไฟล์ในเครื่อง — ใช้ตอน dev ท้องถิ่น
 # fallback เป็น path เดิมไว้เผื่อ .env ยังไม่ได้ตั้งค่า (ไม่ทำให้ deploy เดิมพัง)
-_firebase_service_account = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
-if _firebase_service_account and _firebase_service_account.strip().startswith("{"):
-    _firebase_cred = credentials.Certificate(json.loads(_firebase_service_account))
-else:
-    _FIREBASE_KEY = Path(
-        _firebase_service_account
-        or (Path(__file__).parent.parent / "db_config" / "firebase-adminsdk-key-fbsvc-a8c8f167bd.json")
-    )
-    _firebase_cred = credentials.Certificate(str(_FIREBASE_KEY))
 _fcm_ready = False
 try:
+    _firebase_service_account = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+    if _firebase_service_account and _firebase_service_account.strip().startswith("{"):
+        _firebase_cred = credentials.Certificate(json.loads(_firebase_service_account))
+    else:
+        _FIREBASE_KEY = Path(
+            _firebase_service_account
+            or (Path(__file__).parent.parent / "db_config" / "firebase-adminsdk-key-fbsvc-a8c8f167bd.json")
+        )
+        _firebase_cred = credentials.Certificate(str(_FIREBASE_KEY))
     if not firebase_admin._apps:
         firebase_admin.initialize_app(_firebase_cred)
     _fcm_ready = True
@@ -386,9 +386,16 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme
     return payload
 
 
-def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+def require_admin(
+    request: Request, current_user: dict = Depends(get_current_user)
+) -> dict:
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
+    # เช็ค IP allowlist ทุก request ไม่ใช่แค่ตอน login — เดิมเช็คแค่ /auth/login แล้ว bake
+    # เป็น JWT อายุ JWT_EXPIRE_HOURS ชม. พอ admin หลุด VPN สิทธิ์แอดมินก็ยังใช้ได้จนกว่า token
+    # จะหมดอายุ ไม่ตรงกับ comment/เจตนาว่าต้องอยู่ในเครือข่าย มฟล./VPN ถึงจะใช้สิทธิ์แอดมินได้
+    if not _is_ip_admin_allowed(_client_ip(request)):
+        raise HTTPException(status_code=403, detail="Admin access requires MFU network/VPN")
     return current_user
 
 
@@ -1373,7 +1380,11 @@ def admin_list_csv_cameras(current_user: dict = Depends(require_admin)):
     ให้ admin เลือกมาปักหมุด — ไม่ผูกกับสถานะใน Mongo จึงเห็นครบทุกตัวเสมอ
     (แต่ติด flag `pinned` ให้ด้วยถ้าเช็ค Mongo ได้ เพื่อกันเลือกตัวที่ปักไปแล้วซ้ำ)"""
     try:
-        pinned = {d["name"] for d in cameras_col.find({"located": True}, {"name": 1})}
+        # ไม่มีฟิลด์ located = ถือว่า located อยู่แล้ว (ให้ตรงกับทุกจุดอื่นในไฟล์นี้ที่อ่าน
+        # ฟิลด์นี้ — ดู doc.get("located", True) และ {"located": {"$ne": False}})
+        pinned = {
+            d["name"] for d in cameras_col.find({"located": {"$ne": False}}, {"name": 1})
+        }
     except Exception as e:
         print(f"[cameras] pinned-check skipped: {e!r}")
         pinned = set()

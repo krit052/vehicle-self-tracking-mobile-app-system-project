@@ -15,7 +15,7 @@ import 'user_session.dart';
 /// ตอนนี้รวมมาไว้ที่เดียว:
 ///   - แนบ Authorization header ให้อัตโนมัติทุก request (จาก UserSession ก่อน ถ้าไม่มีค่อย
 ///     อ่านจาก secure storage — เหมือน pattern `_getToken()` เดิมที่กระจายอยู่ทุกหน้าจอ)
-///   - เจอ 401 จาก endpoint ที่ต้อง login (ไม่รวม /auth/* ซึ่ง 401 คือ "รหัสผ่านผิด" ปกติ
+///   - เจอ 401 จาก endpoint ที่ต้อง login (ไม่รวม /auth/login ซึ่ง 401 คือ "รหัสผ่านผิด" ปกติ
 ///     ไม่ใช่ "session หมดอายุ") → เคลียร์ session แล้วเด้งกลับไปหน้า login ให้อัตโนมัติ
 class ApiClient {
   ApiClient._internal() {
@@ -40,8 +40,11 @@ class ApiClient {
         },
         onError: (error, handler) {
           final path = error.requestOptions.path;
-          final isAuthEndpoint = path.startsWith('/auth/');
-          if (error.response?.statusCode == 401 && !isAuthEndpoint) {
+          // /auth/login เท่านั้นที่ 401 หมายถึง "รหัสผ่านผิด" ปกติ ส่วน endpoint อื่น
+          // ที่ขึ้นต้นด้วย /auth/ (เช่น /auth/me, /auth/profile) เป็น endpoint ที่ต้อง
+          // login อยู่แล้ว 401 ที่นี่คือ session หมดอายุเหมือน endpoint อื่นทั่วไป
+          final isLoginEndpoint = path.startsWith('/auth/login');
+          if (error.response?.statusCode == 401 && !isLoginEndpoint) {
             _handleSessionExpired();
           }
           handler.next(error);

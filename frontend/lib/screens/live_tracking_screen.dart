@@ -310,11 +310,14 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       if (detectedPoint != null && _followUser) {
         _mapController.move(detectedPoint!, 18);
       }
-    } on DioException {
+    } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
         _locationLoading = false;
         _vehicleInfoLoading = false;
+        _locationError =
+            e.response?.data?['detail']?.toString() ??
+            'Could not load vehicle location.';
       });
     }
   }
@@ -399,6 +402,17 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       });
     } on DioException catch (e) {
       debugPrint(e.response?.data.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.response?.data?['detail']?.toString() ??
+                  (shouldLock ? 'Could not lock vehicle.' : 'Could not unlock vehicle.'),
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _locking = false);
