@@ -14,6 +14,7 @@ import cloudinary.uploader
 import csv
 import hashlib
 import hmac
+import ipaddress
 import json
 import math
 # import smtplib
@@ -98,6 +99,42 @@ CAMERAS_FILE = Path(__file__).parent.parent / "cameras.json"
 # ความยาวรหัสผ่านขั้นต่ำ ใช้ร่วมกันทั้งตอน register และ reset password (ต้องตรงกัน —
 # เดิม register ไม่เช็คเลยแต่ reset บังคับ 4 ตัว ทำให้สร้างบัญชีรหัสผ่านสั้นกว่าที่ reset ยอมได้)
 MIN_PASSWORD_LENGTH = int(os.environ.get("MIN_PASSWORD_LENGTH", 8))
+
+# ── Admin network restriction ────────────────────────────────────────────────────
+# admin มีสิทธิ์ดูกล้อง/ตำแหน่งรถแบบ real-time ทั้งระบบ — ถ้า login จากนอกเครือข่าย
+# มฟล. (เน็ตนอก/เน็ตมือถือ) ต้องเชื่อมต่อ GlobalProtect VPN ผ่าน sslvpn.mfu.ac.th ก่อน
+# ค่อย login ได้ ตั้งค่า ADMIN_ALLOWED_CIDRS เป็น IP/CIDR ของเครือข่าย มฟล. และ/หรือ
+# public IP ที่ GlobalProtect gateway ใช้ NAT ออกอินเทอร์เน็ต (คั่นด้วยจุลภาค เช่น
+# "10.1.0.0/16,203.0.113.5/32") — หาค่าจริงได้โดยเชื่อมต่อ VPN แล้วเช็ค public IP ของ
+# เครื่อง (เช่นเปิด https://ifconfig.me ตอนต่อ VPN อยู่) หรือสอบถามทีม network ของ มฟล.
+# ถ้าปล่อยว่างไว้ (ค่าเริ่มต้น) จะ "ไม่บังคับ" เพราะยังไม่มี CIDR จริงมายืนยัน — ปล่อยว่าง
+# แล้วบังคับใช้ทันทีจะล็อก admin ทุกคนออกจากระบบโดยไม่ตั้งใจ
+ADMIN_ALLOWED_CIDRS = [
+    c.strip() for c in os.environ.get("ADMIN_ALLOWED_CIDRS", "").split(",") if c.strip()
+]
+_ADMIN_ALLOWED_NETWORKS = []
+for _cidr in ADMIN_ALLOWED_CIDRS:
+    try:
+        _ADMIN_ALLOWED_NETWORKS.append(ipaddress.ip_network(_cidr, strict=False))
+    except ValueError:
+        print(f"Warning: invalid ADMIN_ALLOWED_CIDRS entry ignored: {_cidr!r}")
+ADMIN_VPN_REQUIRED_MESSAGE = (
+    "การเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบต้องเชื่อมต่อเครือข่าย มฟล. เท่านั้น "
+    "กรุณาเชื่อมต่อ VPN ผ่าน sslvpn.mfu.ac.th (GlobalProtect) ก่อนเข้าสู่ระบบอีกครั้ง"
+)
+
+
+def _is_ip_admin_allowed(ip: str) -> bool:
+    """True ถ้าไม่ได้ตั้งค่า ADMIN_ALLOWED_CIDRS ไว้ (ยังไม่บังคับ) หรือ ip อยู่ใน
+    ช่วงที่อนุญาต — แยกจาก _client_ip เพื่อเทสได้ตรงๆ โดยไม่ต้องปลอม Request"""
+    if not _ADMIN_ALLOWED_NETWORKS:
+        return True
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _ADMIN_ALLOWED_NETWORKS)
+
 
 # Rate limit ของ /auth/login และ /auth/register กันการยิงสุ่มรหัสผ่าน/สแปมสมัครสมาชิก
 # เก็บ in-memory ต่อ process เท่านั้น (พอสำหรับ deploy เป็น backend instance เดียวตาม
@@ -306,6 +343,11 @@ def _enforce_rate_limit(key: str, max_attempts: int, window_seconds: int) -> Non
 
 
 def _client_ip(request: Request) -> str:
+    # backend รันหลัง proxy ของ Render — request.client.host เป็น IP ของ proxy ไม่ใช่
+    # client จริง ต้องอ่านจาก X-Forwarded-For (Render ใส่ IP client จริงไว้เป็นตัวแรก)
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -720,6 +762,9 @@ def login(req: LoginRequest, request: Request):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     role = user.get("role", "user")
+    if role == "admin" and not _is_ip_admin_allowed(_client_ip(request)):
+        raise HTTPException(status_code=403, detail=ADMIN_VPN_REQUIRED_MESSAGE)
+
     token = create_token(
         {"sub": str(user["_id"]), "name": user["name"], "email": user["email"], "role": role}
     )

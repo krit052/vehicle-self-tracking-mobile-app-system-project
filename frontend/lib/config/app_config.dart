@@ -11,6 +11,6 @@ class AppConfig {
 
   static const String backendUrl = String.fromEnvironment(
     'BACKEND_URL',
-    defaultValue: 'https://primp-squeeze-dedicator.ngrok-free.dev',
+    defaultValue: 'https://vehicle-self-tracking-mobile-app.onrender.com',
   );
 }
