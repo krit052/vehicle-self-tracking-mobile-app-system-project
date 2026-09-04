@@ -24,7 +24,7 @@
 ติดตั้ง MongoDB 7.0.34 ==>> https://www.mongodb.com/try/download/community
 สร้างโปรเจคใน Mongo Atlas แล้วชวนทีมเข้ามา //
 
-ใน Mongo Compass กด + แล้วใส่ mongodb+srv://6631501045_db_user:5IJeciYTtb2GwtwL@vehicle-self-tracking.axgoaf1.mongodb.net/
+ใน Mongo Compass กด + แล้วใส่ mongodb+srv://<your_db_user>:<your_db_password>@vehicle-self-tracking.axgoaf1.mongodb.net/
 
 สร้างโปรเจคใน firebase console แล้วชวนทีมเข้ามา //
 สร้างโปรเจคใน cloudinary แล้วชวนทีมเข้ามา //
@@ -83,7 +83,7 @@ BACKEND_URL=http://localhost:8000
 # VIDEO_SOURCE=footage.mp4   ← ใส่ตอน develop เพื่อใช้ไฟล์แทน RTSP, ลบออกตอน deploy จริง
 
 # Cloudinary (รูปภาพ)
-CLOUDINARY_URL=cloudinary://596868621737339:<xLufQYj-Go_Krta_I6Ady_WVpTU>@dbhgmwsfg
+CLOUDINARY_URL=cloudinary://<your_api_key>:<your_api_secret>@<your_cloud_name>
 ```
 
 > `CAMERA_ID` — ไว้ก่อน จะได้ค่านี้ตอน seed camera
@@ -113,7 +113,7 @@ ai_worker/
 
 ```bash
 # MongoDB รันเป็น Windows service หลังจากติดตั้งแล้ว
-เชื่อม mongodb+srv://6631501045_db_user:5IJeciYTtb2GwtwL@vehicle-self-tracking.axgoaf1.mongodb.net/
+เชื่อม mongodb+srv://<your_db_user>:<your_db_password>@vehicle-self-tracking.axgoaf1.mongodb.net/
 ```
 
 ### A2. Backend
